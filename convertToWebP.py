@@ -13,12 +13,14 @@ import concurrent.futures
 import sv_ttk
 import time
 import shutil
+from sys import platform
 
 
 
 class ImageConverterGUI(ttk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
+        cursor_point = "hand2" if platform != "darwin" else "pointinghand"
         
         def resource_path(relative_path):
             try:
@@ -56,7 +58,7 @@ class ImageConverterGUI(ttk.Frame):
         folder_entry = ttk.Entry(self, width=30, textvariable=self.folder_path)
         folder_entry.grid(column=1, row=0, padx=20, pady=20, sticky=tk.W)
         
-        folder_button = ttk.Button(self, text="Select Folder", command=self.select_folder, cursor="hand2")
+        folder_button = ttk.Button(self, text="Select Folder", command=self.select_folder, cursor=cursor_point)
         folder_button.grid(column=2, row=0, padx=20, pady=20, sticky=tk.W)
         
         destination_folder_label = ttk.Label(self, text="Destination Folder:")
@@ -65,16 +67,16 @@ class ImageConverterGUI(ttk.Frame):
         destination_folder_entry = ttk.Entry(self, width=30, textvariable=self.destination_folder_path)
         destination_folder_entry.grid(column=1, row=1, padx=20, pady=20, sticky=tk.W)
         
-        destination_folder_button = ttk.Button(self, text="Select Folder", command=self.destination_select_folder, cursor="hand2")
+        destination_folder_button = ttk.Button(self, text="Select Folder", command=self.destination_select_folder, cursor=cursor_point)
         destination_folder_button.grid(column=2, row=1, padx=20, pady=20, sticky=tk.W)
         
-        convert_checkbox = ttk.Checkbutton(self, text="Convert", variable=self.convert, cursor="hand2")
+        convert_checkbox = ttk.Checkbutton(self, text="Convert", variable=self.convert, cursor=cursor_point)
         convert_checkbox.grid(column=1, row=2, padx=20, pady=20, sticky=tk.W)
         
-        rename_checkbox = ttk.Checkbutton(self, text="Rename", variable=self.rename, cursor="hand2")
+        rename_checkbox = ttk.Checkbutton(self, text="Rename", variable=self.rename, cursor=cursor_point)
         rename_checkbox.grid(column=2, row=2, padx=20, pady=20, sticky=tk.W)
         
-        compress_checkbox = ttk.Checkbutton(self, text="Compress", variable=self.compress, command=self.toggle_compress, cursor="hand2")
+        compress_checkbox = ttk.Checkbutton(self, text="Compress", variable=self.compress, command=self.toggle_compress, cursor=cursor_point)
         compress_checkbox.grid(column=0, row=2, padx=20, pady=20, sticky=tk.W)
 
         quality_label_text = ttk.Label(self, text="Quality:")
@@ -93,7 +95,7 @@ class ImageConverterGUI(ttk.Frame):
         self.quality_entry.grid(column=2, row=3, padx=20, pady=20, sticky=tk.W)
         
         self.resize_checkbox = tk.BooleanVar()
-        resize_checkbox = ttk.Checkbutton(self, text="Enable Resizing", variable=self.resize_checkbox, command=self.toggle_resize_slider, cursor="hand2")
+        resize_checkbox = ttk.Checkbutton(self, text="Enable Resizing", variable=self.resize_checkbox, command=self.toggle_resize_slider, cursor=cursor_point)
         resize_checkbox.grid(column=0, padx=20, pady=20, row=4, sticky=tk.W)
         
         resize_label = ttk.Label(self, text="Resize Width (%):")
@@ -125,18 +127,20 @@ class ImageConverterGUI(ttk.Frame):
         height = self.winfo_reqheight()
         self.new_width_percentage.trace('w', self.validate_resize_percentage)
         self.quality.trace('w', self.validate_quality_percentage)
+    
 
         # Update the geometry of the window to fit the content
-        
+    
     def update_resize_label(self, value):
         self.resize_label.configure(text="Resize: {}%".format(round(float(value))))
         
     def toggle_resize_slider(self):
+        cursor_point = "hand2" if platform != "darwin" else "pointinghand"
         if self.resize_checkbox.get():
             self.resize_label.config(state=tk.NORMAL)
             self.resize_slider.config(state=tk.NORMAL)
             self.resize_entry.config(state=tk.NORMAL)
-            self.resize_slider.config(cursor="hand2")
+            self.resize_slider.config(cursor=cursor_point)
             self.resize_entry.config(cursor="xterm")
         else:
             self.resize_label.config(state=tk.DISABLED)
@@ -147,6 +151,7 @@ class ImageConverterGUI(ttk.Frame):
 
 
     def toggle_compress(self):
+        cursor_point = "hand2" if platform != "darwin" else "pointinghand"
         if not self.compress.get():
             self.quality_label.config(state=tk.DISABLED)
             self.quality_slider.config(state=tk.DISABLED)
@@ -157,7 +162,7 @@ class ImageConverterGUI(ttk.Frame):
             self.quality_label.config(state=tk.NORMAL)
             self.quality_slider.config(state=tk.NORMAL)
             self.quality_entry.config(state=tk.NORMAL)
-            self.quality_slider.config(cursor="hand2")
+            self.quality_slider.config(cursor=cursor_point)
             self.quality_entry.config(cursor="xterm")
             
     def validate_quality_percentage(self, *args):
@@ -376,6 +381,9 @@ class FileRenamerGUI(ttk.Frame):
 class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.style = ttk.Style(self)
+        self.style.configure("TFrame", background="#1c1c1c")
+        cursor_point = "hand2" if platform != "darwin" else "pointinghand"
 
         self.title("Image Converter and File Renamer")
 
@@ -396,11 +404,11 @@ class MainApp(tk.Tk):
         self.button_frame = tk.Frame(self)
         self.button_frame.pack(side="top", fill="x")
 
-        self.image_converter_button = tk.Button(self.button_frame, text="Image Converter", command=self.show_image_converter, bg='black', fg='white', padx=5, pady=5, bd=0, cursor="arrow")
-        self.image_converter_button.pack(side="left")
+        self.image_converter_button = ttk.Button(self.button_frame, text="Converter", command=self.show_image_converter, cursor="arrow", state="disabled")
+        self.image_converter_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)
 
-        self.file_renamer_button = tk.Button(self.button_frame, text="File Renamer", command=self.show_file_renamer, bg='grey', fg='white', padx=5, pady=5, bd=0, cursor="hand2")
-        self.file_renamer_button.pack(side="left")
+        self.file_renamer_button = ttk.Button(self.button_frame, text="File Renamer", command=self.show_file_renamer, cursor=cursor_point)
+        self.file_renamer_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)
 
         self.image_converter = ImageConverterGUI(self)
         self.image_converter.pack(side="left", fill="both", expand=True)
@@ -413,6 +421,7 @@ class MainApp(tk.Tk):
         self.geometry('800x575')
 
     def show_image_converter(self):
+        cursor_point = "hand2" if platform != "darwin" else "pointinghand"
         # Fade out
         for i in range(10, -1, -1):
             self.attributes('-alpha', i/10)
@@ -422,8 +431,8 @@ class MainApp(tk.Tk):
         self.file_renamer.pack_forget()
         self.image_converter.pack(side="left", fill="both", expand=True)
 
-        self.image_converter_button.config(state='disabled', bg='black', fg='white', padx=5, pady=5, bd=0, cursor="arrow")
-        self.file_renamer_button.config(state='normal', bg='grey', fg='white', padx=5, pady=5, bd=0, cursor="hand2")
+        self.image_converter_button.config(state='disabled', cursor="arrow")
+        self.file_renamer_button.config(state='normal', cursor=cursor_point)
 
         # Fade in
         for i in range(0, 11):
@@ -432,6 +441,7 @@ class MainApp(tk.Tk):
             time.sleep(0.05)
 
     def show_file_renamer(self):
+        cursor=cursor_point = "hand2" if platform != "darwin" else "pointinghand"
         # Fade out
         for i in range(10, -1, -1):
             self.attributes('-alpha', i/10)
@@ -441,8 +451,8 @@ class MainApp(tk.Tk):
         self.image_converter.pack_forget()
         self.file_renamer.pack(side="right", fill="both", expand=True)
 
-        self.file_renamer_button.config(state='disabled', bg='black', fg='white', padx=5, pady=5, bd=0, cursor="arrow")
-        self.image_converter_button.config(state='normal', bg='grey', fg='white', padx=5, pady=5, bd=0, cursor="hand2")
+        self.file_renamer_button.config(state='disabled', cursor="arrow")
+        self.image_converter_button.config(state='normal', cursor=cursor_point)
 
         # Fade in
         for i in range(0, 11):
