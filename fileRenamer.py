@@ -22,6 +22,7 @@ class FileRenamerGUI(ttk.Frame):
         self.folder_path = tk.StringVar()
         self.single_file_path = tk.StringVar()  # To store the path of the single selected file
         sv_ttk.set_theme("dark")
+        cursor_point = "hand2" if platform != "darwin" else "pointinghand"
 
         folder_label = ttk.Label(self, text="Location Folder:")
         folder_label.grid(column=0, row=0, padx=20, pady=20, sticky=tk.W)
@@ -29,7 +30,7 @@ class FileRenamerGUI(ttk.Frame):
         folder_entry = ttk.Entry(self, width=30, textvariable=self.folder_path)
         folder_entry.grid(column=1, row=0, padx=20, pady=20, sticky=tk.W)
         
-        folder_button = ttk.Button(self, text="Select Folder", command=self.select_folder)
+        folder_button = ttk.Button(self, text="Select Folder", command=self.select_folder, cursor=cursor_point)
         folder_button.grid(column=2, row=0, padx=20, pady=20, sticky=tk.W)
         
         file_label = ttk.Label(self, text="Single File:")
@@ -38,10 +39,10 @@ class FileRenamerGUI(ttk.Frame):
         file_entry = ttk.Entry(self, width=30, textvariable=self.single_file_path)
         file_entry.grid(column=1, row=1, padx=20, pady=20, sticky=tk.W)
 
-        file_button = ttk.Button(self, text="Select File", command=self.select_file)
+        file_button = ttk.Button(self, text="Select File", command=self.select_file, cursor=cursor_point)
         file_button.grid(column=2, row=1, padx=20, pady=20, sticky=tk.W)
 
-        rename_button = ttk.Button(self, text="Rename Files", command=self.rename_files)
+        rename_button = ttk.Button(self, text="Rename Files", command=self.rename_files, cursor=cursor_point)
         rename_button.grid(column=0, row=2, padx=20, pady=20, sticky=tk.W)
 
     def select_folder(self):

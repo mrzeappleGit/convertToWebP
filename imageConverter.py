@@ -115,7 +115,7 @@ class ImageConverterGUI(ttk.Frame):
         self.resize_label = ttk.Label(self, text="Resize: {}%".format(self.new_width_percentage.get()), state=tk.DISABLED)
         self.resize_label.grid(column=3, row=5, padx=20, pady=20, sticky=tk.W)
 
-        convert_button = ttk.Button(self, text="Run", command=self.convert_images)
+        convert_button = ttk.Button(self, text="Run", command=self.convert_images, cursor=cursor_point)
         convert_button.grid(column=0, row=6, padx=20, pady=20, sticky=tk.W)
 
         progress_bar = ttk.Progressbar(self, orient="horizontal", mode="determinate", variable=self.progress, style="green.Horizontal.TProgressbar")
