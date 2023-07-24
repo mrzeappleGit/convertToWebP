@@ -299,7 +299,7 @@ class ImageConverterGUI(ttk.Frame):
             new_width = int(image.width * width_percent)
             new_height = int(image.height * (new_width / image.width))
             
-            image = image.resize((new_width, new_height), Image.ANTIALIAS)
+            image = image.resize((new_width, new_height), Image.LANCZOS)
             relative_path = os.path.relpath(file_path, folder_path)
             new_file_path = os.path.join(destination_folder_path, relative_path)
             
