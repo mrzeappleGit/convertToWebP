@@ -257,7 +257,7 @@ class ImageConverterGUI(ttk.Frame):
         if os.path.isdir(path):
             for root, dirs, filenames in os.walk(path):
                 for filename in filenames:
-                    if re.search(".(jpg|jpeg|png|bmp|tiff)$", filename):
+                    if re.search(".(jpg|jpeg|png|bmp|tiff)$", filename, re.IGNORECASE):
                         files.append(os.path.join(root, filename))
         elif os.path.isfile(path):
             files.append(path)
@@ -285,13 +285,14 @@ class ImageConverterGUI(ttk.Frame):
                 destination_path = os.path.join(self.destination_folder_path.get(), relative_path)
                 destination_input_path = os.path.join(destination_path, self.fileOut.get())
                 convert = self.convert.get()
+                extension = os.path.splitext(file)[1][1:].lower()
                 if convert == True:
                     output_path = os.path.splitext(destination_input_path)[0] + ".webp"
                     self.extension.set("webp")
                 else:
-                    if os.path.splitext(file)[1][1:] == "jpg" or os.path.splitext(file)[1][1:] == "jpeg":
+                    if extension == "jpg" or extension == "jpeg":
                         self.extension.set("jpeg")
-                    elif os.path.splitext(file)[1][1:] == "png":
+                    elif extension == "png":
                         self.extension.set("png")
                     output_path = os.path.splitext(destination_input_path)[0] + os.path.splitext(file)[1]
                 overide_image = self.overide_images.get()
