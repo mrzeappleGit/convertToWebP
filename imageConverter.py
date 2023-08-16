@@ -213,7 +213,7 @@ class ImageConverterGUI(ttk.Frame):
     def select_file(self):
         file_selected = filedialog.askopenfilename(
             title="Select an image file",
-            filetypes=(("jpeg files", "*.jpg"), ("png files", "*.png"), ("all files", "*.*"))
+            filetypes=(("jpeg, png, webp files", "*.jpg *.png *.webp"), ("all files", "*.*"))
         )
         self.folder_path.set(file_selected)
 
@@ -257,7 +257,7 @@ class ImageConverterGUI(ttk.Frame):
         if os.path.isdir(path):
             for root, dirs, filenames in os.walk(path):
                 for filename in filenames:
-                    if re.search(".(jpg|jpeg|png|bmp|tiff)$", filename, re.IGNORECASE):
+                    if re.search(".(jpg|jpeg|png|bmp|tiff|webp)$", filename, re.IGNORECASE):
                         files.append(os.path.join(root, filename))
         elif os.path.isfile(path):
             files.append(path)
@@ -324,27 +324,33 @@ class ImageConverterGUI(ttk.Frame):
             new_height = int(image.height * (new_width / image.width))
             
             image = image.resize((new_width, new_height), Image.LANCZOS)
+
+            # Determine the base new_file_path
             if single_file_selected:
                 new_file_path = os.path.join(destination_folder_path, os.path.basename(file_path))
             else:
                 relative_path = os.path.relpath(file_path, folder_path)
                 new_file_path = os.path.join(destination_folder_path, relative_path)
             
-            # Modify file name
+            # Modify file name if renaming is enabled
             new_file_name = os.path.splitext(os.path.basename(new_file_path))[0]
-            if rename == True:
+            if rename:
                 new_file_name = re.sub(r'[^\w\s-]', '', new_file_name)  # Remove special characters
                 new_file_name = new_file_name.lower()  # Convert to lowercase
                 new_file_name = new_file_name.replace(' ', '-')  # Replace spaces with hyphens
                 new_file_name = re.sub(r'[-_]+', '-', new_file_name)  # Remove underscores and multiple hyphens
                 new_file_name = re.sub(r'^-|-$', '', new_file_name)  # Remove leading and trailing hyphens
             
-            new_file_path = os.path.join(os.path.dirname(new_file_path), new_file_name + '.' + extension)
-            
+            # Determine the final new_file_path based on the desired extension
+            if extension == "webp":
+                new_file_path = os.path.join(os.path.dirname(new_file_path), new_file_name + '.webp')
+            else:
+                new_file_path = os.path.join(os.path.dirname(new_file_path), new_file_name + '.' + extension)
+
             os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
-            image.save(new_file_path, format=extension, quality=quality, method=6)
+            image.save(new_file_path, quality=quality, method=6)
                 
-        if overide_image == True:
+        if overide_image:
             os.remove(file_path)
 
 
