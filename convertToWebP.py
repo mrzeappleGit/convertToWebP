@@ -23,7 +23,7 @@ import subprocess
 from datetime import datetime
 from cryptography.fernet import Fernet
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.4.0"
+currentVersion = "1.4.1"
 
 headers = {
     'User-Agent': 'convertToWebP/1.0'
@@ -91,6 +91,7 @@ class MainApp(tk.Tk):
         # Dropdown menu for the hamburger menu button
         self.dropdown_menu = tk.Menu(self, tearoff=0)
         self.update_dropdown_menu()
+        self.periodic_check_for_updates()
         
         
     def check_for_updates_at_start(self):
@@ -217,6 +218,16 @@ class MainApp(tk.Tk):
         
         about_win.geometry('300x400')  # Adjusted the size for the image
         about_win.mainloop()
+        
+    def periodic_check_for_updates(self):
+        # Check for updates
+        self.update_available = self.check_for_updates_at_start()
+        
+        # Modify the hamburger menu button accordingly
+        self.update_menu_button_text()
+        
+        # Schedule the next check for 24 hours from now
+        self.after(15*60*60*1000, self.periodic_check_for_updates)
         
 
             
