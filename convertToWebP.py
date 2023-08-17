@@ -20,8 +20,15 @@ from imageConverter import ImageConverterGUI
 from fileRenamer import FileRenamerGUI
 import requests
 import subprocess
-GITHUB_REPO_API = "https://api.github.com/repos/mrzeappleGit/convertToWebP/releases/latest"
+from datetime import datetime
+from cryptography.fernet import Fernet
+SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
 currentVersion = "1.4.0"
+
+headers = {
+    'User-Agent': 'convertToWebP/1.0'
+}
+
 
 class MainApp(tk.Tk):
     def __init__(self):
@@ -73,7 +80,7 @@ class MainApp(tk.Tk):
         self.file_renamer.pack_forget()
 
         self.geometry('800x600')
-        is_update_available(currentVersion, 'github_owner_name', 'repository_name')
+        is_update_available(currentVersion)
         
         # Check for updates on startup
         self.update_available = self.check_for_updates_at_start()
@@ -88,7 +95,9 @@ class MainApp(tk.Tk):
         
     def check_for_updates_at_start(self):
         # Check for updates
-        if is_update_available(currentVersion, 'mrzeappleGit', 'convertToWebP'):
+        isAvailable = is_update_available(currentVersion)
+        boolAvailable = isAvailable[0]
+        if boolAvailable:
             return True
         else:
             return False
@@ -157,13 +166,15 @@ class MainApp(tk.Tk):
             time.sleep(0.05)
             
     def check_and_update(self):
-        if is_update_available(currentVersion, "mrzeappleGit", "convertToWebP"):  # replace '1.0.0' with your current version
+        update_available, download_url = is_update_available(currentVersion)
+        if update_available:
             answer = messagebox.askyesno("Update Available", "An update is available. Do you want to download and install it?")
             if answer:
-                download_update("mrzeappleGit", "convertToWebP")
-                apply_update()
-                messagebox.showinfo("Update Successful", "The application was updated successfully. Please restart the application to use the new version.")
-                self.quit()
+                download_success = download_update(download_url)  # Pass the download URL
+                if download_success:
+                    apply_update()
+                    messagebox.showinfo("Update Successful", "The application was updated successfully. Please restart the application to use the new version.")
+                    self.quit()
         else:
             messagebox.showinfo("No Update", "You are using the latest version.")
             
@@ -209,23 +220,10 @@ class MainApp(tk.Tk):
         
 
             
-def download_update(owner, repo):
+def download_update(download_url):
     try:
-        response = requests.get(GITHUB_REPO_API.format(owner=owner, repo=repo))
-        data = response.json()
-        
-        # Extract the URL of the .exe file from the assets of the latest release
-        exe_url = None
-        for asset in data.get("assets", []):
-            if asset.get("name", "").endswith(".exe"):
-                exe_url = asset.get("browser_download_url")
-                break
-        
-        if not exe_url:
-            print("No .exe file found in the latest release.")
-            return
-        
-        response = requests.get(exe_url, stream=True)
+        # Download the .exe file
+        response = requests.get(download_url, stream=True)
         with open('latest_app.exe', 'wb') as file:
             for chunk in response.iter_content(chunk_size=1024):
                 file.write(chunk)
@@ -233,6 +231,7 @@ def download_update(owner, repo):
     except Exception as e:
         print(f"Error downloading update: {e}")
         return False
+
     
 def apply_update():
     try:
@@ -263,19 +262,23 @@ del update_helper.bat
         return False
 
             
-def is_update_available(current_version, owner, repo):
-        try:
-            response = requests.get(GITHUB_REPO_API.format(owner=owner, repo=repo))
-            data = response.json()
-            latest_version = data.get('tag_name', "").strip()
-            
-            # Assuming version format is like "v1.0.0", remove the "v" for comparison
-            if latest_version.startswith("v"):
-                latest_version = latest_version[1:]
-            
-            return latest_version > current_version
-        except:
-            return False
+def is_update_available(current_version):
+    try:
+        # Generate headers with the token
+        headers = {
+            'User-Agent': 'convertToWebP/1.0'
+        }
+        
+        response = requests.get(SERVER_URL, headers=headers)
+        data = response.json()
+        
+        latest_version = data.get('version', "")
+        download_url = data.get('download_url', "")
+        
+        return latest_version > current_version, download_url
+    except Exception as e:
+        print(f"Error checking for update: {e}")
+        return False, ""
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
