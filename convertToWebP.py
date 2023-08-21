@@ -18,12 +18,13 @@ import shutil
 from sys import platform
 from imageConverter import ImageConverterGUI
 from fileRenamer import FileRenamerGUI
+from pdfToImage import pdfToImageGUI
 import requests
 import subprocess
 from datetime import datetime
 from cryptography.fernet import Fernet
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.4.1"
+currentVersion = "1.5.0"
 
 headers = {
     'User-Agent': 'convertToWebP/1.0'
@@ -62,6 +63,9 @@ class MainApp(tk.Tk):
         self.file_renamer_button = ttk.Button(self.button_frame, text="File Renamer", command=self.show_file_renamer, cursor=cursor_point)
         self.file_renamer_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)
         
+        self.pdf_to_image_button = ttk.Button(self.button_frame, text="PDF to Image", command=self.show_pdf_to_image, cursor=cursor_point)
+        self.pdf_to_image_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)        
+        
         # Hamburger menu button
         self.menu_button = ttk.Button(self.button_frame, text="≡", command=self.show_menu)
         self.menu_button.pack(side="right", padx=5, pady=5)
@@ -75,6 +79,8 @@ class MainApp(tk.Tk):
         self.image_converter.pack(side="left", fill="both", expand=True)
         self.file_renamer = FileRenamerGUI(self)
         self.file_renamer.pack(side="right", fill="both", expand=True)
+        self.pdf_to_image = pdfToImageGUI(self)
+        self.pdf_to_image.pack(side="top", fill="both", expand=True)
 
         # Hide the file renamer at startup
         self.file_renamer.pack_forget()
@@ -131,10 +137,12 @@ class MainApp(tk.Tk):
             time.sleep(0.05)
 
         self.file_renamer.pack_forget()
+        self.pdf_to_image.pack_forget()
         self.image_converter.pack(side="left", fill="both", expand=True)
 
         self.image_converter_button.config(state='disabled', cursor="arrow")
         self.file_renamer_button.config(state='normal', cursor=cursor_point)
+        self.pdf_to_image_button.config(state='normal', cursor=cursor_point)
 
         # Fade in
         for i in range(0, 11):
@@ -155,10 +163,34 @@ class MainApp(tk.Tk):
             time.sleep(0.05)
 
         self.image_converter.pack_forget()
+        self.pdf_to_image.pack_forget()
         self.file_renamer.pack(side="right", fill="both", expand=True)
 
         self.file_renamer_button.config(state='disabled', cursor="arrow")
         self.image_converter_button.config(state='normal', cursor=cursor_point)
+        self.pdf_to_image_button.config(state='normal', cursor=cursor_point)
+
+        # Fade in
+        for i in range(0, 11):
+            self.attributes('-alpha', i/10)
+            self.update()
+            time.sleep(0.05)
+            
+    def show_pdf_to_image(self):
+        cursor=cursor_point = "hand2" if platform != "darwin" else "pointinghand"
+        # Fade out
+        for i in range(10, -1, -1):
+            self.attributes('-alpha', i/10)
+            self.update()
+            time.sleep(0.05)
+
+        self.image_converter.pack_forget()
+        self.file_renamer.pack_forget()
+        self.pdf_to_image.pack(side="right", fill="both", expand=True)
+
+        self.file_renamer_button.config(state='normal', cursor=cursor_point)
+        self.image_converter_button.config(state='normal', cursor=cursor_point)
+        self.pdf_to_image_button.config(state='disabled', cursor="arrow")
 
         # Fade in
         for i in range(0, 11):
