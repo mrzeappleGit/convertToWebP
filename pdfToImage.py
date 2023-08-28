@@ -24,7 +24,7 @@ class pdfToImageGUI(ttk.Frame):
         file_button = ttk.Button(self, text="Select PDF", command=self.select_pdf, cursor=cursor_point)
         file_button.grid(column=2, row=0, padx=20, pady=20, sticky=tk.W)
 
-        convert_button = ttk.Button(self, text="Convert PDF to WebP", command=self.convert_pdf_to_webp, cursor=cursor_point)
+        convert_button = ttk.Button(self, text="Convert PDF", command=self.convert_pdf_to_webp, cursor=cursor_point)
         convert_button.grid(column=1, row=1, padx=20, pady=20, sticky=tk.W)
 
     def select_pdf(self):
