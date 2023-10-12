@@ -240,6 +240,17 @@ class ImageConverterGUI(ttk.Frame):
         else:
             seconds = round(seconds, 2)
             return f"{seconds} seconds"
+        
+    def adjust_ppi(image, desired_ppi):
+        """Adjust the PPI (pixels per inch) of the image to the desired value."""
+        # Get current dpi
+        dpi = image.info.get('dpi', (72, 72))
+        if dpi[0] > desired_ppi:
+            # Change the DPI without changing pixel data
+            image = image.copy()
+            image.info['dpi'] = (desired_ppi, desired_ppi)
+        return image
+
 
     def convert_images(self):
         if not self.folder_path.get() or not self.destination_folder_path.get():
@@ -324,6 +335,7 @@ class ImageConverterGUI(ttk.Frame):
             new_height = int(image.height * (new_width / image.width))
             
             image = image.resize((new_width, new_height), Image.LANCZOS)
+            image = ImageConverterGUI.adjust_ppi(image, 72)
 
             # Determine the base new_file_path
             if single_file_selected:
