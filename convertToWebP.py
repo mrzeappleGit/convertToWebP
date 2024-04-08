@@ -24,6 +24,7 @@ from VideoConverterGUI import VideoConverterGUI
 import requests
 import subprocess
 from datetime import datetime
+import numpy
 from cryptography.fernet import Fernet
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
 currentVersion = "1.6.1"
@@ -114,6 +115,7 @@ class MainApp(tk.Tk):
         self.dropdown_menu = tk.Menu(self, tearoff=0)
         self.update_dropdown_menu()
         self.periodic_check_for_updates()
+
         
         
     def check_for_updates_at_start(self):
@@ -366,14 +368,13 @@ def apply_update():
         
         # Create the helper script
         with open('update_helper.bat', 'w') as bat_file:
-            bat_content = """
-@echo off
-timeout /t 5 /nobreak
-move /y update_temp.exe convertToWebP.exe
-start convertToWebP.exe
-del update_helper.bat
-"""
-            bat_file.write(bat_content)
+            exeName = os.path.basename(sys.executable)
+            bat_file.write("@echo off\n")
+            bat_file.write("timeout /t 5 /nobreak\n")
+            bat_file.write("taskkill /IM " + exeName + " /F\n")
+            bat_file.write("move /y update_temp.exe " + exeName + "\n")
+            bat_file.write("start " + exeName + "\n")
+            bat_file.write("del update_helper.bat")
         
         # Start the helper script to handle the replacement without showing the command prompt
         startupinfo = subprocess.STARTUPINFO()

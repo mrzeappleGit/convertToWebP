@@ -13,14 +13,6 @@ class VideoConverterGUI(ttk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
         
-        # Helper function to get resources when bundled with PyInstaller
-        def resource_path(relative_path):
-            try:
-                base_path = sys._MEIPASS
-            except Exception:
-                base_path = os.path.abspath(".")
-            return os.path.join(base_path, relative_path)
-        
         cursor_point = "hand2" if platform != "darwin" else "pointinghand"
         
         self.style = ttk.Style(self)
@@ -62,6 +54,13 @@ class VideoConverterGUI(ttk.Frame):
         self.video_progress.grid(column=0, row=4, columnspan=4, padx=20, pady=20, sticky=tk.W+tk.E)
         self.estimated_time_label = ttk.Label(self, text="Estimated Time Remaining: --:--", font=("Helvetica", 10))
         self.estimated_time_label.grid(column=1, row=5, padx=20, pady=5, sticky=tk.W)
+    # Helper function to get resources when bundled with PyInstaller
+    def resource_path(relative_path):
+        try:
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+        return os.path.join(base_path, relative_path)
 
 
 
@@ -92,7 +91,7 @@ class VideoConverterGUI(ttk.Frame):
 
     def start_conversion(self):
         # Define ffmpeg path and prepare the command
-        ffmpeg_path = self.resource_path("resources/ffmpeg.exe")
+        ffmpeg_path = self.resource_path("ffmpeg.exe")
         input_file = self.folder_path.get()
         output_folder = self.destination_folder_path.get()
         output_file = os.path.join(output_folder, os.path.splitext(os.path.basename(input_file))[0] + "." + self.video_format.get())
@@ -152,11 +151,3 @@ class VideoConverterGUI(ttk.Frame):
             base_path = os.path.abspath(".")
             
         return os.path.join(base_path, relative_path)
-
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.title("Video Converter")
-    app = VideoConverterGUI(master=root)
-    app.grid(padx=20, pady=20)
-    root.mainloop()
