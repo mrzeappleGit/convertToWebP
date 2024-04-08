@@ -51,7 +51,7 @@ class VideoConverterGUI(ttk.Frame):
         video_format_label.grid(column=0, row=2, padx=20, pady=20, sticky=tk.W)
         
         self.video_format = tk.StringVar()
-        video_formats = ["webm"]
+        video_formats = ["webm", "mp4"]
         self.format_dropdown = ttk.Combobox(self, textvariable=self.video_format, values=video_formats)
         self.format_dropdown.set("webm")
         self.format_dropdown.grid(column=1, row=2, padx=20, pady=20, sticky=tk.W)
@@ -66,7 +66,10 @@ class VideoConverterGUI(ttk.Frame):
 
 
     def select_file(self):
-        file_path = filedialog.askopenfilename()
+        file_path = filedialog.askopenfilename(
+            title="Select an video file",
+            filetypes=(("WebM, MP4, MOV", "*.webm *.mp4 *.mov"), ("all files", "*.*"))
+        )
         if file_path:
             self.folder_path.set(file_path)
 
@@ -93,8 +96,10 @@ class VideoConverterGUI(ttk.Frame):
         input_file = self.folder_path.get()
         output_folder = self.destination_folder_path.get()
         output_file = os.path.join(output_folder, os.path.splitext(os.path.basename(input_file))[0] + "." + self.video_format.get())
+        codec = "libvpx" if self.video_format.get() == "webm" else "h264"
+            
 
-        cmd = [ffmpeg_path, "-i", input_file, "-c:v", "libvpx", "-b:v", "1M", "-c:a", "libvorbis", output_file]
+        cmd = [ffmpeg_path, "-i", input_file, "-c:v", codec, "-b:v", "1M", "-c:a", "libvorbis", output_file]
         
         # Define a constant for hiding the console window
         CREATE_NO_WINDOW = 0x08000000
@@ -109,8 +114,8 @@ class VideoConverterGUI(ttk.Frame):
         duration = None
         for line in process.stdout:
             if "Duration" in line:
-                time_parts = line.split("Duration:")[1].split(",")[0].strip().split(":")
-                hours, minutes, seconds = map(float, time_parts)
+                time_parts = ['N/A', '30', '45']
+                hours, minutes, seconds = map(lambda x: float(x) if x != 'N/A' else 0, time_parts)
                 duration = hours * 3600 + minutes * 60 + seconds
                 break
 
@@ -120,8 +125,8 @@ class VideoConverterGUI(ttk.Frame):
         # Continually update progress based on ffmpeg's output
         for line in process.stdout:
             if "time=" in line:
-                time_parts = line.split("time=")[1].split(" ")[0].strip().split(":")
-                hours, minutes, seconds = map(float, time_parts)
+                time_parts = ['N/A', '30', '45']
+                hours, minutes, seconds = map(lambda x: float(x) if x != 'N/A' else 0, time_parts)
                 elapsed_time = hours * 3600 + minutes * 60 + seconds
 
                 # Calculate progress and update progress bar

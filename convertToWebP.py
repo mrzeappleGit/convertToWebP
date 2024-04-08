@@ -12,6 +12,7 @@ from tkinter import messagebox
 import webbrowser
 from PIL import Image, ImageTk
 import concurrent.futures
+from imageManipulationGUI import ImageManipulationGUI
 import sv_ttk
 import time
 import shutil
@@ -39,7 +40,7 @@ class MainApp(tk.Tk):
         self.style.configure("TFrame", background="#1c1c1c")
         cursor_point = "hand2" if platform != "darwin" else "pointinghand"
 
-        self.title("Image Converter and File Renamer")
+        self.title("Universal File & WebP Tool Set")
 
         def resource_path(relative_path):
             try:
@@ -67,8 +68,11 @@ class MainApp(tk.Tk):
         self.pdf_to_image_button = ttk.Button(self.button_frame, text="PDF to Image", command=self.show_pdf_to_image, cursor=cursor_point)
         self.pdf_to_image_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)
         
-        self.video_converter_button = ttk.Button(self.button_frame, text="WebM converter", command=self.show_video_converter, cursor=cursor_point)
-        self.video_converter_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)           
+        self.video_converter_button = ttk.Button(self.button_frame, text="Video converter", command=self.show_video_converter, cursor=cursor_point)
+        self.video_converter_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)        
+        
+        #self.image_manipulation_button = ttk.Button(self.button_frame, text="Image Manipulation", command=self.show_image_manipulation, cursor=cursor_point)
+        #self.image_manipulation_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)   
         
         # Hamburger menu button
         self.menu_button = ttk.Button(self.button_frame, text="≡", command=self.show_menu)
@@ -87,11 +91,15 @@ class MainApp(tk.Tk):
         self.pdf_to_image.pack(side="top", fill="both", expand=True)
         self.video_converter = VideoConverterGUI(self)
         self.video_converter.pack(side="top", fill="both", expand=True)
+        self.image_manipulation = ImageManipulationGUI(self)
+        self.image_manipulation.pack(side="left", fill="both", expand=True)
+
 
         # Hide the file renamer at startup
         self.file_renamer.pack_forget()
         self.pdf_to_image.pack_forget()
         self.video_converter.pack_forget()
+        self.image_manipulation.pack_forget()
 
         self.geometry('800x600')
         is_update_available(currentVersion)
@@ -302,6 +310,39 @@ class MainApp(tk.Tk):
         
         # Schedule the next check for 24 hours from now
         self.after(15*60*60*1000, self.periodic_check_for_updates)
+    
+    def show_image_manipulation(self):
+        cursor_point = "hand2" if platform != "darwin" else "pointinghand"
+        self.geometry('800x600')  # Adjust size as needed
+
+        # Fade out current components
+        for i in range(10, -1, -1):
+            self.attributes('-alpha', i / 10)
+            self.update()
+            time.sleep(0.05)
+
+        # Hide other components
+        self.image_converter.pack_forget()
+        self.file_renamer.pack_forget()
+        self.pdf_to_image.pack_forget()
+        self.video_converter.pack_forget()
+
+        # Show the Image Manipulation GUI
+        self.image_manipulation.pack(side="left", fill="both", expand=True)
+
+        # Update button states
+        self.image_converter_button.config(state='normal', cursor=cursor_point)
+        self.file_renamer_button.config(state='normal', cursor=cursor_point)
+        self.pdf_to_image_button.config(state='normal', cursor=cursor_point)
+        self.video_converter_button.config(state='normal', cursor=cursor_point)
+        #self.image_manipulation_button.config(state='disabled', cursor="arrow")
+
+        # Fade in the new component
+        for i in range(0, 11):
+            self.attributes('-alpha', i / 10)
+            self.update()
+            time.sleep(0.05)
+
         
 
             
