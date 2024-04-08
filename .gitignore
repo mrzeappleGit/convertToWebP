@@ -10,4 +10,7 @@
 /oldVersions
 /convertToWebP-7-23-23.spec
 /.DS_Store
-/__pycache__
+**/__pycache__
+__pycache__/imageConverter.cpython-310.pyc
+__pycache__/pdfToImage.cpython-310.pyc
+__pycache__/VideoConverterGUI.cpython-310.pyc
