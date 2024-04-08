@@ -26,7 +26,7 @@ import subprocess
 from datetime import datetime
 from cryptography.fernet import Fernet
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.6.0"
+currentVersion = "1.6.1"
 
 headers = {
     'User-Agent': 'convertToWebP/1.0'
