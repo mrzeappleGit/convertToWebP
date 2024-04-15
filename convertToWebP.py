@@ -27,11 +27,37 @@ from datetime import datetime
 import numpy
 from cryptography.fernet import Fernet
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.6.1"
+currentVersion = "1.6.2"
 
 headers = {
     'User-Agent': 'convertToWebP/1.0'
 }
+
+class HyperlinkManager:
+    def __init__(self, text):
+        self.text = text
+        self.text.tag_config("hyper", foreground="white", underline=1)
+        self.text.tag_bind("hyper", "<Enter>", self._enter)
+        self.text.tag_bind("hyper", "<Leave>", self._leave)
+        self.text.tag_bind("hyper", "<Button-1>", self._click)
+        self.links = {}
+
+    def add(self, url):
+        tag = "hyper-%d" % len(self.links)
+        self.links[tag] = url
+        return "hyper", tag
+
+    def _enter(self, event):
+        self.text.config(cursor="hand2")
+
+    def _leave(self, event):
+        self.text.config(cursor="")
+
+    def _click(self, event):
+        for tag in self.text.tag_names(tk.CURRENT):
+            url = self.links.get(tag)
+            if url:
+                webbrowser.open(url)
 
 
 class MainApp(tk.Tk):
@@ -84,6 +110,7 @@ class MainApp(tk.Tk):
         self.dropdown_menu = tk.Menu(self, tearoff=0)
         self.dropdown_menu.add_command(label="Check for Updates", command=self.check_and_update)
 
+
         self.image_converter = ImageConverterGUI(self)
         self.image_converter.pack(side="left", fill="both", expand=True)
         self.file_renamer = FileRenamerGUI(self)
@@ -92,17 +119,17 @@ class MainApp(tk.Tk):
         self.pdf_to_image.pack(side="top", fill="both", expand=True)
         self.video_converter = VideoConverterGUI(self)
         self.video_converter.pack(side="top", fill="both", expand=True)
-        self.image_manipulation = ImageManipulationGUI(self)
-        self.image_manipulation.pack(side="left", fill="both", expand=True)
+        #self.image_manipulation = ImageManipulationGUI(self)
+        #self.image_manipulation.pack(side="left", fill="both", expand=True)
 
 
         # Hide the file renamer at startup
         self.file_renamer.pack_forget()
         self.pdf_to_image.pack_forget()
         self.video_converter.pack_forget()
-        self.image_manipulation.pack_forget()
+        #self.image_manipulation.pack_forget()
 
-        self.geometry('800x600')
+        self.geometry('')
         is_update_available(currentVersion)
         
         # Check for updates on startup
@@ -144,11 +171,74 @@ class MainApp(tk.Tk):
         
         self.dropdown_menu.add_command(label=menu_text, command=self.check_and_update)
         self.dropdown_menu.add_command(label="About", command=self.show_about)
+        self.dropdown_menu.add_command(label="Licenses", command=self.show_licenses)
+        
+        
+    def show_licenses(self):
+        license_window = tk.Toplevel(self)
+        license_window.title("Licenses")
+        license_window.geometry('')
+
+        text = tk.Text(license_window, wrap='word', font=('TkDefaultFont', 11))
+        text.pack(expand=True, fill='both', padx=10, pady=10)
+        text.config(state='disabled')  # Make the text read-only initially
+
+        hyperlink = HyperlinkManager(text)  # Create a hyperlink manager
+
+        button_frame = tk.Frame(license_window)
+        button_frame.pack(side='top', pady=10)
+
+        def update_license(license_text, add_link=False):
+            text.config(state='normal')
+            text.delete('1.0', 'end')
+            text.tag_configure('body', lmargin1=0, lmargin2=0, rmargin=0)
+            text.insert('end', license_text, 'body')
+            if add_link:
+                text.insert('end', " LGPLv2.1.", hyperlink.add("http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html"))
+            text.config(state='disabled')
+
+        ffmpeg_button = ttk.Button(button_frame, text="FFmpeg License",
+                                    command=lambda: update_license("""This software uses libraries from the FFmpeg project under the """, add_link=True))
+        ffmpeg_button.pack(side='left', padx=5)
+
+        jpegxl_button = ttk.Button(button_frame, text="JPEG XL License",
+                                    command=lambda: update_license("""This software includes the JPEG XL codec under the BSD-3-Clause License.
+                                    
+Copyright (c) the JPEG XL Project Authors.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""))
+        jpegxl_button.pack(side='left', padx=5)
+
+
         
 
     def show_image_converter(self):
         cursor_point = "hand2" if platform != "darwin" else "pointinghand"
-        self.geometry('800x600')
+        self.geometry('')
         # Fade out
         for i in range(10, -1, -1):
             self.attributes('-alpha', i/10)
@@ -177,7 +267,7 @@ class MainApp(tk.Tk):
 
     def show_file_renamer(self):
         cursor=cursor_point = "hand2" if platform != "darwin" else "pointinghand"
-        self.geometry('700x300')
+        self.geometry('')
         # Fade out
         for i in range(10, -1, -1):
             self.attributes('-alpha', i/10)
@@ -202,7 +292,7 @@ class MainApp(tk.Tk):
             
     def show_pdf_to_image(self):
         cursor=cursor_point = "hand2" if platform != "darwin" else "pointinghand"
-        self.geometry('700x200')
+        self.geometry('')
         # Fade out
         for i in range(10, -1, -1):
             self.attributes('-alpha', i/10)
@@ -227,7 +317,7 @@ class MainApp(tk.Tk):
             
     def show_video_converter(self):
         cursor=cursor_point = "hand2" if platform != "darwin" else "pointinghand"
-        self.geometry('650x450')
+        self.geometry('')
         # Fade out
         for i in range(10, -1, -1):
             self.attributes('-alpha', i/10)
@@ -315,7 +405,7 @@ class MainApp(tk.Tk):
     
     def show_image_manipulation(self):
         cursor_point = "hand2" if platform != "darwin" else "pointinghand"
-        self.geometry('800x600')  # Adjust size as needed
+        self.geometry('')  # Adjust size as needed
 
         # Fade out current components
         for i in range(10, -1, -1):

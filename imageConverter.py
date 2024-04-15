@@ -2,6 +2,7 @@ from multiprocessing import Process, Queue, cpu_count
 import multiprocessing
 from multiprocessing.dummy import Pool
 import re
+import subprocess
 import sys
 import time
 import os
@@ -20,15 +21,6 @@ class ImageConverterGUI(ttk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
         cursor_point = "hand2" if platform != "darwin" else "pointinghand"
-        
-        def resource_path(relative_path):
-            try:
-                # PyInstaller creates a temp folder and stores path in _MEIPASS
-                base_path = sys._MEIPASS
-            except Exception:
-                base_path = os.path.abspath(".")
-                
-            return os.path.join(base_path, relative_path)
         
         self.style = ttk.Style(self)
         self.style.configure("TFrame", background="#1c1c1c")
@@ -72,57 +64,63 @@ class ImageConverterGUI(ttk.Frame):
         destination_folder_button = ttk.Button(self, text="Select Folder", command=self.destination_select_folder, cursor=cursor_point)
         destination_folder_button.grid(column=2, row=1, padx=20, pady=20, sticky=tk.W)
         
-        convert_checkbox = ttk.Checkbutton(self, text="Convert", variable=self.convert, cursor=cursor_point)
-        convert_checkbox.grid(column=1, row=2, padx=20, pady=20, sticky=tk.W)
+        convert_checkbox = ttk.Checkbutton(self, text="Convert", variable=self.convert, cursor=cursor_point, command=self.toggle_convert)
+        convert_checkbox.grid(column=0, row=2, padx=20, pady=20, sticky=tk.W)
+        
+        self.image_format = tk.StringVar()
+        image_formats = ["WebP", "JPGLI"]
+        self.format_dropdown = ttk.Combobox(self, textvariable=self.image_format, values=image_formats, state=tk.DISABLED)
+        self.format_dropdown.set("WebP")
+        self.format_dropdown.grid(column=1, row=2, padx=20, pady=20, sticky=tk.W)
         
         rename_checkbox = ttk.Checkbutton(self, text="Rename", variable=self.rename, cursor=cursor_point)
-        rename_checkbox.grid(column=2, row=2, padx=20, pady=20, sticky=tk.W)
+        rename_checkbox.grid(column=1, row=3, padx=20, pady=20, sticky=tk.W)
         
         compress_checkbox = ttk.Checkbutton(self, text="Compress", variable=self.compress, command=self.toggle_compress, cursor=cursor_point)
-        compress_checkbox.grid(column=0, row=2, padx=20, pady=20, sticky=tk.W)
+        compress_checkbox.grid(column=0, row=3, padx=20, pady=20, sticky=tk.W)
 
         quality_label_text = ttk.Label(self, text="Quality:")
-        quality_label_text.grid(column=0, row=3, padx=20, pady=20, sticky=tk.W)
+        quality_label_text.grid(column=0, row=4, padx=20, pady=20, sticky=tk.W)
         
         self.quality = tk.IntVar(value=100)
 
         self.quality_slider = ttk.Scale(self, length=250, orient="horizontal", from_=0, to=100, variable=self.quality, command=self.update_quality_label, state=tk.DISABLED, cursor="arrow")
-        self.quality_slider.grid(column=1, row=3, padx=20, pady=20, sticky=tk.W)
+        self.quality_slider.grid(column=1, row=4, padx=20, pady=20, sticky=tk.W)
 
         self.quality_label = ttk.Label(self, text="Quality: {}%".format(self.quality.get()), state=tk.DISABLED)
-        self.quality_label.grid(column=3, row=3, padx=20, pady=20, sticky=tk.W)
+        self.quality_label.grid(column=3, row=4, padx=20, pady=20, sticky=tk.W)
         
         
         self.quality_entry = ttk.Entry(self, textvariable=self.quality, width=5, state=tk.DISABLED, cursor="arrow")
-        self.quality_entry.grid(column=2, row=3, padx=20, pady=20, sticky=tk.W)
+        self.quality_entry.grid(column=2, row=4, padx=20, pady=20, sticky=tk.W)
         
         self.resize_checkbox = tk.BooleanVar()
         resize_checkbox = ttk.Checkbutton(self, text="Enable Resizing", variable=self.resize_checkbox, command=self.toggle_resize_slider, cursor=cursor_point)
-        resize_checkbox.grid(column=0, padx=20, pady=20, row=4, sticky=tk.W)
+        resize_checkbox.grid(column=0, padx=20, pady=20, row=5, sticky=tk.W)
         
         resize_label = ttk.Label(self, text="Resize Width (%):")
-        resize_label.grid(column=0, row=5, padx=20, pady=20, sticky=tk.W)
+        resize_label.grid(column=0, row=6, padx=20, pady=20, sticky=tk.W)
 
         self.new_width_percentage = tk.IntVar(value=100)  # Default value of 100
 
         self.resize_slider = ttk.Scale(self, length=250, from_=1, to=100, orient="horizontal", variable=self.new_width_percentage, command=self.update_resize_label, state=tk.DISABLED, cursor="arrow")
-        self.resize_slider.grid(column=1, row=5, padx=20, pady=20, sticky=tk.W)
+        self.resize_slider.grid(column=1, row=6, padx=20, pady=20, sticky=tk.W)
         
         
         self.resize_entry = ttk.Entry(self, textvariable=self.new_width_percentage, width=5, state=tk.DISABLED, cursor="arrow")
-        self.resize_entry.grid(column=2, row=5, padx=20, pady=20, sticky=tk.W)
+        self.resize_entry.grid(column=2, row=6, padx=20, pady=20, sticky=tk.W)
 
         self.resize_label = ttk.Label(self, text="Resize: {}%".format(self.new_width_percentage.get()), state=tk.DISABLED)
-        self.resize_label.grid(column=3, row=5, padx=20, pady=20, sticky=tk.W)
+        self.resize_label.grid(column=3, row=6, padx=20, pady=20, sticky=tk.W)
 
         convert_button = ttk.Button(self, text="Run", command=self.convert_images, cursor=cursor_point)
-        convert_button.grid(column=0, row=6, padx=20, pady=20, sticky=tk.W)
+        convert_button.grid(column=0, row=7, padx=20, pady=20, sticky=tk.W)
 
         progress_bar = ttk.Progressbar(self, orient="horizontal", mode="determinate", variable=self.progress, style="green.Horizontal.TProgressbar")
-        progress_bar.grid(column=0, row=7, columnspan=4, padx=20, pady=20, sticky=tk.W+tk.E)
+        progress_bar.grid(column=0, row=8, columnspan=4, padx=20, pady=20, sticky=tk.W+tk.E)
         
         self.time_label = tk.Label(self, text="", font=("Helvetica", 12))
-        self.time_label.grid(column=1, row=6, padx=20, pady=20, sticky=tk.W)
+        self.time_label.grid(column=1, row=7, padx=20, pady=20, sticky=tk.W)
         
         # Get the required width and height of the window based on its content
         width = self.winfo_reqwidth()
@@ -130,8 +128,14 @@ class ImageConverterGUI(ttk.Frame):
         self.new_width_percentage.trace('w', self.validate_resize_percentage)
         self.quality.trace('w', self.validate_quality_percentage)
     
-
-        # Update the geometry of the window to fit the content
+    def resource_path(relative_path):
+        try:
+            # PyInstaller creates a temp folder and stores path in _MEIPASS
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+            
+        return os.path.join(base_path, relative_path)
     
     def update_resize_label(self, value):
         self.resize_label.configure(text="Resize: {}%".format(round(float(value))))
@@ -166,6 +170,13 @@ class ImageConverterGUI(ttk.Frame):
             self.quality_entry.config(state=tk.NORMAL)
             self.quality_slider.config(cursor=cursor_point)
             self.quality_entry.config(cursor="xterm")
+            
+    def toggle_convert(self):
+        cursor_point = "hand2" if platform != "darwin" else "pointinghand"
+        if not self.convert.get():
+            self.format_dropdown.config(state=tk.DISABLED)
+        else:
+            self.format_dropdown.config(state=tk.NORMAL)
             
     def validate_quality_percentage(self, *args):
         try:
@@ -298,8 +309,9 @@ class ImageConverterGUI(ttk.Frame):
                 convert = self.convert.get()
                 extension = os.path.splitext(file)[1][1:].lower()
                 if convert == True:
-                    output_path = os.path.splitext(destination_input_path)[0] + ".webp"
-                    self.extension.set("webp")
+                    extensionConvert = "webp" if self.image_format == "WebP" else "jpeg"
+                    output_path = os.path.splitext(destination_input_path)[0] + extensionConvert
+                    self.extension.set(extensionConvert)
                 else:
                     if extension == "jpg" or extension == "jpeg":
                         self.extension.set("jpeg")
@@ -310,9 +322,9 @@ class ImageConverterGUI(ttk.Frame):
                 convert = self.convert.get()
                 extension = self.extension.get()
                 if self.resize_checkbox.get():
-                    results.append(pool.apply_async(ImageConverterGUI.convert_file, args=(file, self.rename.get(), quality, overide_image, extension, self.folder_path.get(), self.destination_folder_path.get(), self.new_width_percentage.get(), single_file_selected)))
+                    results.append(pool.apply_async(ImageConverterGUI.convert_file, args=(file, self.rename.get(), quality, overide_image, extension, self.folder_path.get(), self.destination_folder_path.get(), self.new_width_percentage.get(), single_file_selected, convert)))
                 else:
-                    results.append(pool.apply_async(ImageConverterGUI.convert_file, args=(file, self.rename.get(), quality, overide_image, extension, self.folder_path.get(), self.destination_folder_path.get(), 100, single_file_selected)))
+                    results.append(pool.apply_async(ImageConverterGUI.convert_file, args=(file, self.rename.get(), quality, overide_image, extension, self.folder_path.get(), self.destination_folder_path.get(), 100, single_file_selected, convert)))
 
             for result in results:
                 result.get()
@@ -327,7 +339,7 @@ class ImageConverterGUI(ttk.Frame):
 
 
     @staticmethod
-    def convert_file(file_path, rename, quality, overide_image, extension, folder_path, destination_folder_path, new_width_percentage, single_file_selected):
+    def convert_file(file_path, rename, quality, overide_image, extension, folder_path, destination_folder_path, new_width_percentage, single_file_selected, convert):
         with Image.open(file_path) as image:
             # Calculate new height while maintaining the aspect ratio
             width_percent = new_width_percentage / 100
@@ -354,13 +366,21 @@ class ImageConverterGUI(ttk.Frame):
                 new_file_name = re.sub(r'^-|-$', '', new_file_name)  # Remove leading and trailing hyphens
             
             # Determine the final new_file_path based on the desired extension
-            if extension == "webp":
-                new_file_path = os.path.join(os.path.dirname(new_file_path), new_file_name + '.webp')
-            else:
-                new_file_path = os.path.join(os.path.dirname(new_file_path), new_file_name + '.' + extension)
-
+            new_file_path = os.path.join(os.path.dirname(new_file_path), new_file_name + '.' + extension)
             os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
             image.save(new_file_path, quality=quality, method=6)
+            if extension =="jpeg" and convert == True:
+                cjpegli_path = ImageConverterGUI.resource_path("cjpegli.exe")
+                cmd = [cjpegli_path, new_file_path, new_file_path]
+        
+                # Define a constant for hiding the console window
+                CREATE_NO_WINDOW = 0x08000000
+
+                # Start ffmpeg process depending on the platform
+                if sys.platform == "win32":
+                    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, creationflags=CREATE_NO_WINDOW)
+                else:
+                    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
                 
         if overide_image:
             os.remove(file_path)
