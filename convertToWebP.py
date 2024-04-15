@@ -12,7 +12,7 @@ from tkinter import messagebox
 import webbrowser
 from PIL import Image, ImageTk
 import concurrent.futures
-from imageManipulationGUI import ImageManipulationGUI
+# from imageManipulationGUI import ImageManipulationGUI
 import sv_ttk
 import time
 import shutil
