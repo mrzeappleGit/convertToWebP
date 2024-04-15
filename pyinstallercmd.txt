@@ -1,0 +1,1 @@
+python -m PyInstaller -F --collect-data sv_ttk --icon=convertToWebPIcon.ico --noconsole --clean --onefile --add-data 'convertToWebPIcon.ico;.' --add-data 'convertToWebPLogo.png;.' --add-data "./resources/ffmpeg.exe;." .\convertToWebP.py ./fileRenamer.py ./imageConverter.py ./pdfToImage.py .\VideoConverterGUI.py
