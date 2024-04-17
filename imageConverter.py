@@ -68,7 +68,7 @@ class ImageConverterGUI(ttk.Frame):
         convert_checkbox.grid(column=0, row=2, padx=20, pady=20, sticky=tk.W)
         
         self.image_format = tk.StringVar()
-        image_formats = ["WebP", "JPGLI"]
+        image_formats = ["WebP", "JPEGLI"]
         self.format_dropdown = ttk.Combobox(self, textvariable=self.image_format, values=image_formats, state=tk.DISABLED)
         self.format_dropdown.set("WebP")
         self.format_dropdown.grid(column=1, row=2, padx=20, pady=20, sticky=tk.W)
@@ -224,7 +224,7 @@ class ImageConverterGUI(ttk.Frame):
     def select_file(self):
         file_selected = filedialog.askopenfilename(
             title="Select an image file",
-            filetypes=(("jpeg, png, webp files", "*.jpg *.png *.webp"), ("all files", "*.*"))
+            filetypes=(("jpeg, png, webp files", "*.jpg *.png *.webp *.jpeg"), ("all files", "*.*"))
         )
         self.folder_path.set(file_selected)
 
@@ -309,7 +309,7 @@ class ImageConverterGUI(ttk.Frame):
                 convert = self.convert.get()
                 extension = os.path.splitext(file)[1][1:].lower()
                 if convert == True:
-                    extensionConvert = "webp" if self.image_format == "WebP" else "jpeg"
+                    extensionConvert = "webp" if self.image_format.get() == "WebP" else "jpeg"
                     output_path = os.path.splitext(destination_input_path)[0] + extensionConvert
                     self.extension.set(extensionConvert)
                 else:
@@ -341,13 +341,21 @@ class ImageConverterGUI(ttk.Frame):
     @staticmethod
     def convert_file(file_path, rename, quality, overide_image, extension, folder_path, destination_folder_path, new_width_percentage, single_file_selected, convert):
         with Image.open(file_path) as image:
-            # Calculate new height while maintaining the aspect ratio
+            # Calculate new dimensions maintaining aspect ratio
             width_percent = new_width_percentage / 100
             new_width = int(image.width * width_percent)
             new_height = int(image.height * (new_width / image.width))
             
             image = image.resize((new_width, new_height), Image.LANCZOS)
             image = ImageConverterGUI.adjust_ppi(image, 72)
+
+            # Check if image mode is RGBA (has an alpha channel)
+            if image.mode == 'RGBA' and extension == 'jpeg':
+                # Create a new image with a white background
+                background = Image.new('RGB', image.size, (255, 255, 255))
+                background.paste(image, mask=image.split()[3])  # 3 is the index of the alpha channel in an RGBA image
+                image = background  # Replace the original image with the new one without alpha
+
 
             # Determine the base new_file_path
             if single_file_selected:
