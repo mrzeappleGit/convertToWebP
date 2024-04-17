@@ -32,3 +32,7 @@ The **Universal File & WebP Toolset** is a robust multi-purpose tool designed to
 ## Support
 
 For support, email [support@matthewstevens.me](mailto:support@matthewstevens.me?subject=[GitHub]%20Universal%20File%20%26%20WebP%20Toolset)
+
+## Licenses
+- This software uses code of <a href=http://ffmpeg.org target=_blank>FFmpeg</a> licensed under the <a href=http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>LGPLv2.1</a> and its source can be downloaded <a href=link_to_your_sources>here</a>
+- This software includes the <a href=https://github.com/libjxl/libjxl target=_blank>JPEG XL</a> codec under the BSD-3-Clause License.
