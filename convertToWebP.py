@@ -21,13 +21,14 @@ from imageConverter import ImageConverterGUI
 from fileRenamer import FileRenamerGUI
 from pdfToImage import pdfToImageGUI
 from VideoConverterGUI import VideoConverterGUI
+from textFormatter import TextFormatterGUI
 import requests
 import subprocess
 from datetime import datetime
 import numpy
 from cryptography.fernet import Fernet
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.6.2"
+currentVersion = "1.7"
 
 headers = {
     'User-Agent': 'convertToWebP/1.0'
@@ -98,6 +99,9 @@ class MainApp(tk.Tk):
         self.video_converter_button = ttk.Button(self.button_frame, text="Video converter", command=self.show_video_converter, cursor=cursor_point)
         self.video_converter_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)        
         
+        self.text_formatter_button = ttk.Button(self.button_frame, text="Text Formatter", command=self.show_text_converter, cursor=cursor_point)
+        self.text_formatter_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)        
+        
         #self.image_manipulation_button = ttk.Button(self.button_frame, text="Image Manipulation", command=self.show_image_manipulation, cursor=cursor_point)
         #self.image_manipulation_button.pack(side="left", ipadx=10, ipady=10, padx=5, pady=5)   
         
@@ -119,6 +123,8 @@ class MainApp(tk.Tk):
         self.pdf_to_image.pack(side="top", fill="both", expand=True)
         self.video_converter = VideoConverterGUI(self)
         self.video_converter.pack(side="top", fill="both", expand=True)
+        self.text_formatter = TextFormatterGUI(self)
+        self.text_formatter.pack(side="top", fill="both", expand=True)
         #self.image_manipulation = ImageManipulationGUI(self)
         #self.image_manipulation.pack(side="left", fill="both", expand=True)
 
@@ -127,6 +133,7 @@ class MainApp(tk.Tk):
         self.file_renamer.pack_forget()
         self.pdf_to_image.pack_forget()
         self.video_converter.pack_forget()
+        self.text_formatter.pack_forget()
         #self.image_manipulation.pack_forget()
 
         self.geometry('')
@@ -249,11 +256,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""))
         self.pdf_to_image.pack_forget()
         self.image_converter.pack(side="left", fill="both", expand=True)
         self.video_converter.pack_forget()
+        self.text_formatter.pack_forget()
 
         self.image_converter_button.config(state='disabled', cursor="arrow")
         self.file_renamer_button.config(state='normal', cursor=cursor_point)
         self.pdf_to_image_button.config(state='normal', cursor=cursor_point)
         self.video_converter_button.config(state='normal', cursor=cursor_point)
+        self.text_formatter_button.config(state='normal', cursor=cursor_point)
 
         # Fade in
         for i in range(0, 11):
@@ -278,11 +287,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""))
         self.pdf_to_image.pack_forget()
         self.file_renamer.pack(side="right", fill="both", expand=True)
         self.video_converter.pack_forget()
+        self.text_formatter.pack_forget()
 
         self.file_renamer_button.config(state='disabled', cursor="arrow")
         self.image_converter_button.config(state='normal', cursor=cursor_point)
         self.pdf_to_image_button.config(state='normal', cursor=cursor_point)
         self.video_converter_button.config(state='normal', cursor=cursor_point)
+        self.text_formatter_button.config(state='normal', cursor=cursor_point)
 
         # Fade in
         for i in range(0, 11):
@@ -303,11 +314,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""))
         self.file_renamer.pack_forget()
         self.pdf_to_image.pack(side="right", fill="both", expand=True)
         self.video_converter.pack_forget()
+        self.text_formatter.pack_forget()
 
         self.file_renamer_button.config(state='normal', cursor=cursor_point)
         self.image_converter_button.config(state='normal', cursor=cursor_point)
         self.pdf_to_image_button.config(state='disabled', cursor="arrow")
         self.video_converter_button.config(state='normal', cursor=cursor_point)
+        self.text_formatter_button.config(state='normal', cursor=cursor_point)
 
         # Fade in
         for i in range(0, 11):
@@ -328,11 +341,40 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""))
         self.file_renamer.pack_forget()
         self.pdf_to_image.pack_forget()
         self.video_converter.pack(side="right", fill="both", expand=True)
+        self.text_formatter.pack_forget()
 
         self.file_renamer_button.config(state='normal', cursor=cursor_point)
         self.image_converter_button.config(state='normal', cursor=cursor_point)
         self.pdf_to_image_button.config(state='normal', cursor=cursor_point)
         self.video_converter_button.config(state='disabled', cursor="arrow")
+        self.text_formatter_button.config(state='normal', cursor=cursor_point)
+
+        # Fade in
+        for i in range(0, 11):
+            self.attributes('-alpha', i/10)
+            self.update()
+            time.sleep(0.05)
+            
+    def show_text_converter(self):
+        cursor=cursor_point = "hand2" if platform != "darwin" else "pointinghand"
+        self.geometry('')
+        # Fade out
+        for i in range(10, -1, -1):
+            self.attributes('-alpha', i/10)
+            self.update()
+            time.sleep(0.05)
+
+        self.image_converter.pack_forget()
+        self.file_renamer.pack_forget()
+        self.pdf_to_image.pack_forget()
+        self.video_converter.pack_forget()
+        self.text_formatter.pack(side="right", fill="both", expand=True)
+
+        self.file_renamer_button.config(state='normal', cursor=cursor_point)
+        self.image_converter_button.config(state='normal', cursor=cursor_point)
+        self.pdf_to_image_button.config(state='normal', cursor=cursor_point)
+        self.video_converter_button.config(state='normal', cursor="arrow")
+        self.text_formatter_button.config(state='disabled', cursor=cursor_point)
 
         # Fade in
         for i in range(0, 11):
@@ -382,7 +424,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""))
 
         # Create and pack widgets for the version, copyright, and link to GitHub
         ttk.Label(about_win, text="Version: " + currentVersion).pack(pady=5)
-        copyright = ttk.Label(about_win, text="©2023 Matthew Thomas Stevens Studios LLC", cursor="hand2", foreground="white", font="TkDefaultFont 10 underline")
+        copyright = ttk.Label(about_win, text="©2024 Matthew Thomas Stevens Studios LLC", cursor="hand2", foreground="white", font="TkDefaultFont 10 underline")
         copyright.pack(pady=5)
         copyright.bind("<Button-1>", lambda e: webbrowser.open("https://www.matthewstevens.me"))
         
