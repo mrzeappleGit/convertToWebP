@@ -28,7 +28,7 @@ from datetime import datetime
 import numpy
 from cryptography.fernet import Fernet
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.7"
+currentVersion = "1.7.1"
 
 headers = {
     'User-Agent': 'convertToWebP/1.0'

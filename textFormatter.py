@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import re
 import sv_ttk
 from sys import platform
@@ -41,13 +41,26 @@ class TextFormatterGUI(ttk.Frame):
         self.result_label.config(text=f"Formatted text: {new_text}")
 
     def copy_to_clipboard(self):
-        self.clipboard_clear()
-        self.clipboard_append(self.formatted_text.get())
-        tk.messagebox.showinfo("Success", "Formatted text copied to clipboard.")
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(self.formatted_text.get())
+            messagebox.showinfo("Success", "Formatted text copied to clipboard.")
+        except tk.TclError:
+            messagebox.showerror("Error", "Failed to copy to clipboard. The application window might have been closed.")
+
+def on_closing(root):
+    try:
+        root.destroy()
+    except Exception as e:
+        print(f"Error closing the application: {e}")
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    root.title("Text Formatter")
-    app = TextFormatterGUI(master=root)
-    app.grid(column=0, row=0, padx=20, pady=20)
-    root.mainloop()
+    try:
+        root = tk.Tk()
+        root.title("Text Formatter")
+        app = TextFormatterGUI(master=root)
+        app.grid(column=0, row=0, padx=20, pady=20)
+        root.protocol("WM_DELETE_WINDOW", lambda: on_closing(root))
+        root.mainloop()
+    except Exception as e:
+        print(f"Unhandled exception: {e}")
