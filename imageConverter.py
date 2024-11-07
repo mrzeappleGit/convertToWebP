@@ -15,6 +15,7 @@ import sv_ttk
 import time
 import shutil
 from sys import platform
+import pillow_avif
 
 
 class ImageConverterGUI(ttk.Frame):
@@ -68,7 +69,7 @@ class ImageConverterGUI(ttk.Frame):
         convert_checkbox.grid(column=0, row=2, padx=20, pady=20, sticky=tk.W)
         
         self.image_format = tk.StringVar()
-        image_formats = ["WebP", "JPEGLI"]
+        image_formats = ["WebP", "PNG", "JPEGLI", "AVIF"]
         self.format_dropdown = ttk.Combobox(self, textvariable=self.image_format, values=image_formats, state=tk.DISABLED)
         self.format_dropdown.set("WebP")
         self.format_dropdown.grid(column=1, row=2, padx=20, pady=20, sticky=tk.W)
@@ -224,7 +225,7 @@ class ImageConverterGUI(ttk.Frame):
     def select_file(self):
         file_selected = filedialog.askopenfilename(
             title="Select an image file",
-            filetypes=(("jpeg, png, webp files", "*.jpg *.png *.webp *.jpeg"), ("all files", "*.*"))
+            filetypes=(("jpeg, png, webp, avif files", "*.jpg *.png *.webp *.jpeg *.avif"), ("all files", "*.*"))
         )
         self.folder_path.set(file_selected)
 
@@ -279,7 +280,7 @@ class ImageConverterGUI(ttk.Frame):
         if os.path.isdir(path):
             for root, dirs, filenames in os.walk(path):
                 for filename in filenames:
-                    if re.search(".(jpg|jpeg|png|bmp|tiff|webp)$", filename, re.IGNORECASE):
+                    if re.search(".(jpg|jpeg|png|bmp|tiff|webp|avif)$", filename, re.IGNORECASE):
                         files.append(os.path.join(root, filename))
         elif os.path.isfile(path):
             files.append(path)
@@ -309,14 +310,18 @@ class ImageConverterGUI(ttk.Frame):
                 convert = self.convert.get()
                 extension = os.path.splitext(file)[1][1:].lower()
                 if convert == True:
-                    extensionConvert = "webp" if self.image_format.get() == "WebP" else "jpeg"
+                    if self.image_format.get() == "WebP":
+                        extensionConvert = "webp"
+                    elif self.image_format.get() == "JPEGLI":
+                        extensionConvert = "jpeg"
+                    elif self.image_format.get() == "AVIF":
+                        extensionConvert = "avif"
+                    elif self.image_format.get() == "PNG":
+                        extensionConvert = "png"
                     output_path = os.path.splitext(destination_input_path)[0] + extensionConvert
                     self.extension.set(extensionConvert)
                 else:
-                    if extension == "jpg" or extension == "jpeg":
-                        self.extension.set("jpeg")
-                    elif extension == "png":
-                        self.extension.set("png")
+                    self.extension.set(extension)
                     output_path = os.path.splitext(destination_input_path)[0] + os.path.splitext(file)[1]
                 overide_image = self.overide_images.get()
                 convert = self.convert.get()
@@ -350,12 +355,11 @@ class ImageConverterGUI(ttk.Frame):
             image = ImageConverterGUI.adjust_ppi(image, 72)
 
             # Check if image mode is RGBA (has an alpha channel)
-            if image.mode == 'RGBA' and extension == 'jpeg':
+            if image.mode == 'RGBA' and extension in ['jpeg', 'jpg']:
                 # Create a new image with a white background
                 background = Image.new('RGB', image.size, (255, 255, 255))
                 background.paste(image, mask=image.split()[3])  # 3 is the index of the alpha channel in an RGBA image
                 image = background  # Replace the original image with the new one without alpha
-
 
             # Determine the base new_file_path
             if single_file_selected:
@@ -376,24 +380,34 @@ class ImageConverterGUI(ttk.Frame):
             # Determine the final new_file_path based on the desired extension
             new_file_path = os.path.join(os.path.dirname(new_file_path), new_file_name + '.' + extension)
             os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
-            image.save(new_file_path, quality=quality, method=6)
-            if extension =="jpeg" and convert == True:
+
+            # Save image in the appropriate format
+            if extension == "jpeg":
+                image.save(new_file_path, "JPEG", quality=quality)
+            elif extension == "png":
+                image.save(new_file_path, "PNG", compress_level=6)  # Adjust compress_level as needed
+            elif extension == "avif":
+                image.save(new_file_path, "AVIF", quality=quality)
+            elif extension == "webp":
+                image.save(new_file_path, "WEBP", quality=quality)
+
+            # Additional logic if using external conversion tools for JPEGLI
+            if extension == "jpeg" and convert == True:
                 cjpegli_path = ImageConverterGUI.resource_path("cjpegli.exe")
                 cmd = [cjpegli_path, new_file_path, new_file_path]
-        
+            
                 # Define a constant for hiding the console window
                 CREATE_NO_WINDOW = 0x08000000
 
-                # Start ffmpeg process depending on the platform
+                # Start subprocess depending on the platform
                 if sys.platform == "win32":
                     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, creationflags=CREATE_NO_WINDOW)
                 else:
                     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
-                
+                    
+        # Remove the original file if override is enabled
         if overide_image:
             os.remove(file_path)
-
-
 
             
     processes = []
