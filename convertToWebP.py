@@ -12,7 +12,6 @@ from tkinter import messagebox
 import webbrowser
 from PIL import Image, ImageTk
 import concurrent.futures
-# from imageManipulationGUI import ImageManipulationGUI # Assuming this might be added later
 import sv_ttk
 import time
 import shutil
@@ -22,17 +21,15 @@ import subprocess
 from datetime import datetime
 # Removed unused imports: numpy, cryptography.fernet
 
-# --- Import your existing GUI components ---
 from imageConverter import ImageConverterGUI
 from fileRenamer import FileRenamerGUI
 from pdfToImage import pdfToImageGUI
 from VideoConverterGUI import VideoConverterGUI
 from textFormatter import TextFormatterGUI
-# --- Import the NEW SVG Circle Generator GUI ---
-from svgCircleGenerator import SVGCircleGeneratorGUI # Added Import
+from svgCircleGenerator import SVGCircleGeneratorGUI
 
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.8.1" # Consider updating this if needed
+currentVersion = "1.8.2" # Consider updating this if needed
 
 headers = {
     'User-Agent': f'convertToWebP/{currentVersion}' # Use f-string
