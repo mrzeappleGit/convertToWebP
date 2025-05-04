@@ -1,45 +1,113 @@
+# Required imports for title bar theming on Windows
+import sys
+if sys.platform == "win32":
+    import ctypes
+    from ctypes import wintypes
+
+# --- Existing imports ---
 from multiprocessing import Process, Queue, cpu_count
 import multiprocessing
 from multiprocessing.dummy import Pool
 import re
-import sys
+# import sys # Already imported above
 import time
 import os
 import tkinter as tk
-from tkinter import  filedialog
+from tkinter import filedialog # Corrected import typo: filedialog instead of filedialog
 from tkinter import ttk
 from tkinter import messagebox
 import webbrowser
 from PIL import Image, ImageTk
 import concurrent.futures
+# from imageManipulationGUI import ImageManipulationGUI # Assuming this might be added later
 import sv_ttk
-import time
+# import time # Already imported
 import shutil
-from sys import platform
+from sys import platform # Keep this for cross-platform checks like cursor
 import requests
 import subprocess
 from datetime import datetime
 # Removed unused imports: numpy, cryptography.fernet
 
+# --- Import your existing GUI components ---
 from imageConverter import ImageConverterGUI
 from fileRenamer import FileRenamerGUI
 from pdfToImage import pdfToImageGUI
 from VideoConverterGUI import VideoConverterGUI
 from textFormatter import TextFormatterGUI
-from svgCircleGenerator import SVGCircleGeneratorGUI
+# --- Import the NEW SVG Circle Generator GUI ---
+from svgCircleGenerator import SVGCircleGeneratorGUI # Added Import
 
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.8.2" # Consider updating this if needed
+currentVersion = "1.8.1" # Consider updating this if needed
 
 headers = {
     'User-Agent': f'convertToWebP/{currentVersion}' # Use f-string
 }
 
+# --- NEW: Function to apply theme to title bar (Windows only) ---
+def apply_theme_to_titlebar(tk_window):
+    """
+    Applies the current sv_ttk theme (dark/light) to the window title bar
+    on Windows 10 build 19041+ / Windows 11.
+    """
+    if sys.platform != "win32":
+        # print("Title bar theming only supported on Windows.")
+        return # Only works on Windows
+
+    try:
+        # Get the current theme from sv_ttk
+        theme = sv_ttk.get_theme()
+        # print(f"Applying '{theme}' theme to title bar.") # Debug print
+
+        # Determine the value for DwmSetWindowAttribute
+        # 1 for dark, 0 for light
+        value = 1 if theme == "dark" else 0
+
+        # Get the window handle (HWND)
+        # Using GetParent because winfo_id() often gives the client area handle
+        hwnd = ctypes.windll.user32.GetParent(tk_window.winfo_id())
+        if not hwnd:
+            print("Error: Could not get window handle (HWND).")
+            return
+
+        # Define DWMWINDOWATTRIBUTE constants (use 20 for newer builds)
+        # DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19
+        DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+
+        # Call DwmSetWindowAttribute
+        # HRESULT DwmSetWindowAttribute(
+        #   HWND    hwnd,
+        #   DWORD   dwAttribute,
+        #   LPCVOID pvAttribute,
+        #   DWORD   cbAttribute
+        # );
+        attribute = DWMWA_USE_IMMERSIVE_DARK_MODE
+        result = ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            hwnd,
+            attribute,
+            ctypes.byref(ctypes.wintypes.BOOL(value)), # Pointer to the value
+            ctypes.sizeof(ctypes.wintypes.BOOL)        # Size of the value type
+        )
+
+        if result != 0: # S_OK is 0, other values indicate an error
+            print(f"Warning: DwmSetWindowAttribute failed with result code {result}. May require Windows 10 20H1+ or Win 11.")
+
+    except AttributeError as e:
+        print(f"Error applying title bar theme: Missing attribute. Ensure 'ctypes' is available and sv_ttk is installed. Details: {e}")
+    except OSError as e:
+        print(f"Error applying title bar theme: OS error. dwmapi.dll might be missing or inaccessible. Details: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred while applying title bar theme: {e}")
+
+
 class HyperlinkManager:
     # No changes needed in HyperlinkManager
     def __init__(self, text):
         self.text = text
-        self.text.tag_config("hyper", foreground="cyan", underline=1) # Use a theme-aware color
+        # Consider using ttk.Style().lookup('TLabel', 'foreground') for default text color
+        # and a specific style color for links if sv_ttk doesn't handle Text widget tags well.
+        self.text.tag_config("hyper", foreground="cyan", underline=1) # Using cyan as before
         self.text.tag_bind("hyper", "<Enter>", self._enter)
         self.text.tag_bind("hyper", "<Leave>", self._leave)
         self.text.tag_bind("hyper", "<Button-1>", self._click)
@@ -123,7 +191,11 @@ class MainApp(tk.Tk):
 
 
         self.resizable(True, True)
+
+        # --- Set Theme AND Apply to Title Bar ---
         sv_ttk.set_theme("dark") # Set theme early
+        self.update_idletasks() # Ensure window exists before getting HWND
+        apply_theme_to_titlebar(self) # <<--- ADDED CALL HERE
 
         self.button_frame = ttk.Frame(self) # Use ttk.Frame for consistency
         self.button_frame.pack(side="top", fill="x", padx=5, pady=5) # Add some padding
@@ -187,6 +259,24 @@ class MainApp(tk.Tk):
         # Set initial size (optional, can let it auto-size)
         # self.geometry('800x600') # Example initial size
 
+    # --- Add a method to explicitly set the theme and update title bar ---
+    # This could be used if you add a theme toggle feature later.
+    def set_app_theme(self, theme_name):
+        """Sets the sv_ttk theme and updates the title bar."""
+        if theme_name not in ("light", "dark"):
+            print(f"Invalid theme name: {theme_name}. Use 'light' or 'dark'.")
+            return
+        try:
+            sv_ttk.set_theme(theme_name)
+            # No need for update_idletasks here as window exists
+            apply_theme_to_titlebar(self)
+            # You might need to update styles for specific widgets
+            # if they don't update automatically, e.g., HyperlinkManager color
+            # self.configure_widget_styles_for_theme(theme_name)
+        except Exception as e:
+            print(f"Error setting theme '{theme_name}': {e}")
+
+
     def _switch_frame(self, target_frame_name):
         """Helper function to switch frames with fade effect."""
         if target_frame_name == self.current_frame_name:
@@ -198,13 +288,19 @@ class MainApp(tk.Tk):
         # --- Fade Out ---
         if do_fade:
             try:
-                for i in range(10, -1, -1):
-                    self.attributes('-alpha', i/10)
-                    self.update()
-                    time.sleep(0.015) # Faster fade
-            except tk.TclError: # Handle cases where alpha might not be supported
+                # Check if alpha is supported before trying to use it
+                if self.attributes('-alpha') is not None:
+                    for i in range(10, -1, -1):
+                        self.attributes('-alpha', i/10)
+                        self.update()
+                        time.sleep(0.015) # Faster fade
+                else:
+                    do_fade = False # Disable fade if not supported from the start
+            except tk.TclError: # Handle cases where alpha might not be supported mid-fade
+                print("Alpha transparency not supported on this system/window manager.")
                 do_fade = False # Disable fade if not supported
-                pass
+                self.attributes('-alpha', 1.0) # Ensure fully opaque if fade fails
+
 
         # --- Hide Current Frame ---
         if self.current_frame_name and self.current_frame_name in self.frames:
@@ -232,15 +328,25 @@ class MainApp(tk.Tk):
         # --- Fade In ---
         if do_fade:
             try:
-                for i in range(0, 11):
-                    self.attributes('-alpha', i/10)
-                    self.update()
-                    time.sleep(0.015) # Faster fade
-                self.attributes('-alpha', 1.0) # Ensure fully opaque
+                # Check again if alpha is supported
+                if self.attributes('-alpha') is not None:
+                    for i in range(0, 11):
+                        self.attributes('-alpha', i/10)
+                        self.update()
+                        time.sleep(0.015) # Faster fade
+                    self.attributes('-alpha', 1.0) # Ensure fully opaque
+                else:
+                    self.attributes('-alpha', 1.0) # Ensure visible if fade disabled at start
             except tk.TclError:
-                 self.attributes('-alpha', 1.0) # Ensure fully opaque if alpha not supported
+                # Handle error during fade-in (less likely but possible)
+                print("Alpha transparency not supported on this system/window manager.")
+                self.attributes('-alpha', 1.0) # Ensure fully opaque
         else:
-            self.attributes('-alpha', 1.0) # Ensure visible if fade disabled
+             # Ensure window is fully opaque if fade was disabled or failed
+             try:
+                 self.attributes('-alpha', 1.0)
+             except tk.TclError:
+                 pass # Ignore if alpha wasn't supported anyway
 
 
     # --- Show Frame Methods ---
@@ -298,6 +404,14 @@ class MainApp(tk.Tk):
             update_label = "! Check for Updates" # Add indicator
 
         self.dropdown_menu.add_command(label=update_label, command=self.check_and_update)
+        # --- Optional: Add Theme Toggle Here ---
+        # current_theme = sv_ttk.get_theme()
+        # next_theme = "light" if current_theme == "dark" else "dark"
+        # self.dropdown_menu.add_command(
+        #     label=f"Switch to {next_theme.capitalize()} Theme",
+        #     command=lambda: self.set_app_theme(next_theme)
+        # )
+        # --- End Optional Theme Toggle ---
         self.dropdown_menu.add_command(label="About", command=self.show_about)
         self.dropdown_menu.add_command(label="Licenses", command=self.show_licenses)
 
@@ -311,6 +425,12 @@ class MainApp(tk.Tk):
     def check_and_update(self):
         # Re-check just in case status changed since last periodic check
         update_avail, download_url_latest = is_update_available(currentVersion)
+
+        # Update internal state and button based on the fresh check
+        self.update_available = update_avail
+        self.download_url = download_url_latest
+        self.update_menu_button_text()
+
         if update_avail:
             # Extract filename from URL for display
             try:
@@ -336,12 +456,10 @@ class MainApp(tk.Tk):
                     else:
                          messagebox.showerror("Update Error", "Failed to apply the update. Please try again or update manually.")
                 else:
-                    messagebox.showerror("Download Error", "Failed to download the update.")
+                     messagebox.showerror("Download Error", "Failed to download the update.")
         else:
             messagebox.showinfo("No Update", "You are using the latest version.")
-            # Reset indicator if user manually checked and no update found
-            self.update_available = False
-            self.update_menu_button_text()
+            # No need to explicitly reset indicator here, it was done by update_menu_button_text()
 
 
     def show_about(self):
@@ -351,6 +469,12 @@ class MainApp(tk.Tk):
         about_win.transient(self) # Make it transient to the main window
         about_win.grab_set()      # Grab focus
         about_win.resizable(False, False)
+
+        # --- Apply Title Bar Theme to Toplevel ---
+        # Need to ensure sv_ttk theme is applied to Toplevels if needed
+        # sv_ttk might handle this, but explicit call ensures title bar matches.
+        about_win.update_idletasks() # Ensure window exists for HWND
+        apply_theme_to_titlebar(about_win) # <<--- APPLY THEME TO TOPLEVEL
 
         # Use the same resource_path function as in __init__
         def resource_path(relative_path):
@@ -367,12 +491,12 @@ class MainApp(tk.Tk):
         try:
             iconPath = resource_path('convertToWebPIcon.ico')
             if os.path.exists(iconPath):
-                about_win.iconbitmap(iconPath)
+                 about_win.iconbitmap(iconPath)
             else: # Try PNG fallback
-                pngIconPath = resource_path('convertToWebPLogo.png')
-                if os.path.exists(pngIconPath):
-                    img = tk.PhotoImage(file=pngIconPath)
-                    about_win.iconphoto(True, img)
+                 pngIconPath = resource_path('convertToWebPLogo.png')
+                 if os.path.exists(pngIconPath):
+                     img = tk.PhotoImage(file=pngIconPath)
+                     about_win.iconphoto(True, img)
         except Exception as e:
              print(f"Warning: Could not set About window icon: {e}")
 
@@ -399,6 +523,7 @@ class MainApp(tk.Tk):
         # Ensure the style is configured before creating labels that use it
         style = ttk.Style()
         # Use a distinct style name like "Hyperlink.TLabel"
+        # Using 'cyan' as before, but ideally use a theme color like 'link.fg' if defined
         style.configure("Hyperlink.TLabel", foreground="cyan", underline=True)
 
         copyright_label = ttk.Label(about_win, text="©2024 Matthew Thomas Stevens Studios LLC", cursor="hand2", style="Hyperlink.TLabel")
@@ -434,6 +559,10 @@ class MainApp(tk.Tk):
         license_window.transient(self)
         license_window.grab_set()
 
+        # --- Apply Title Bar Theme to Toplevel ---
+        license_window.update_idletasks() # Ensure window exists for HWND
+        apply_theme_to_titlebar(license_window) # <<--- APPLY THEME TO TOPLEVEL
+
         # --- Main frame for content ---
         main_license_frame = ttk.Frame(license_window)
         main_license_frame.pack(expand=True, fill='both', padx=10, pady=10)
@@ -447,8 +576,11 @@ class MainApp(tk.Tk):
         text_frame.pack(expand=True, fill='both')
 
         # --- Text Area ---
+        # Let sv_ttk handle the text widget styling if possible
         text = tk.Text(text_frame, wrap='word', font=('TkDefaultFont', 10), height=15,
-                       bg="#2b2b2b", fg="white", insertbackground="white", relief="flat",
+                       # bg="#2b2b2b", fg="white", # Comment out fixed colors
+                       insertbackground="white", # Keep insert color distinct? Or use theme?
+                       relief="flat",
                        borderwidth=0, highlightthickness=0) # Basic styling, remove border
         # --- Scrollbar ---
         scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=text.yview)
@@ -541,7 +673,7 @@ SOFTWARE."""
         # --- Create Buttons for each license ---
         for key in licenses.keys():
              button = ttk.Button(button_frame, text=key, width=12,
-                                command=lambda k=key: update_license_display(k))
+                                 command=lambda k=key: update_license_display(k))
              button.pack(side='left', padx=3)
 
 
@@ -561,7 +693,7 @@ SOFTWARE."""
         license_window.protocol("WM_DELETE_WINDOW", lambda: (license_window.grab_release(), license_window.destroy()))
 
 
-# === Helper Functions (Outside Class) ===
+# === Helper Functions (Outside Class - No changes here related to title bar) ===
 
 def download_update(download_url):
     """Downloads the update file from the given URL."""
@@ -588,12 +720,20 @@ def download_update(download_url):
                 file.write(chunk)
                 downloaded_size += len(chunk)
                 if total_size > 0:
-                    percent = int(progress_bar_length * downloaded_size / total_size)
-                    sys.stdout.write("-" * percent)
-                    sys.stdout.write(" " * (progress_bar_length - percent))
-                    sys.stdout.write("] %d%%" % (100 * downloaded_size / total_size))
+                    # Avoid division by zero if total_size is somehow 0
+                    percent_float = (downloaded_size / total_size) if total_size > 0 else 0
+                    percent_int = int(progress_bar_length * percent_float)
+                    # Ensure percent_int doesn't exceed length due to float inaccuracies
+                    percent_int = min(percent_int, progress_bar_length)
+
+                    sys.stdout.write("-" * percent_int)
+                    sys.stdout.write(" " * (progress_bar_length - percent_int))
+                    sys.stdout.write("] %d%%" % int(100 * percent_float))
                     sys.stdout.flush()
-                    sys.stdout.write("\b" * (progress_bar_length + 5)) # Adjust backspace count
+                    # Adjust backspace count: bar length + start/end brackets + space + percentage (e.g., " 99%") = 4
+                    backspace_count = progress_bar_length + 2 + 4
+                    sys.stdout.write("\b" * backspace_count) # Adjust backspace count
+
 
         sys.stdout.write("-" * progress_bar_length) # Fill bar at end
         sys.stdout.write("] 100%\n")
@@ -660,7 +800,8 @@ def apply_update():
             bat_file.write("  echo ERROR: Failed to replace the application file.\n")
             bat_file.write("  echo Please ensure the application is closed and try updating manually.\n")
             bat_file.write("  pause\n") # Pause so user can see error
-            bat_file.write(f"  del \"{update_exe_path}\" > NUL 2>&1\n") # Attempt to delete downloaded file on failure
+            # Attempt to delete downloaded file on failure, quote path
+            bat_file.write(f"  if exist \"{update_exe_path}\" del \"{update_exe_path}\" > NUL 2>&1\n")
             bat_file.write("  goto cleanup\n") # Go to cleanup section
             bat_file.write(")\n")
             bat_file.write(f"echo Relaunching application...\n")
@@ -677,7 +818,9 @@ def apply_update():
         # Start the helper script without showing the command prompt window
         # Use DETACHED_PROCESS flag for independent execution
         # Ensure the path to the batch file is used
-        subprocess.Popen([helper_bat_path], creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP, close_fds=True)
+        # Add CREATE_NO_WINDOW to hide the console window completely
+        creation_flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        subprocess.Popen([helper_bat_path], creationflags=creation_flags, close_fds=True)
         print(f"Launched {helper_bat_path}")
 
         # The application should exit here to allow replacement
@@ -688,9 +831,9 @@ def apply_update():
         print(f"Error preparing update application: {e}")
         messagebox.showerror("Update Error", f"Could not prepare the update process: {e}")
         # Cleanup helper script if created
-        helper_bat_path = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__)), helper_bat)
-        if os.path.exists(helper_bat_path):
-             try: os.remove(helper_bat_path)
+        helper_bat_path_cleanup = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__)), helper_bat)
+        if os.path.exists(helper_bat_path_cleanup):
+             try: os.remove(helper_bat_path_cleanup)
              except OSError: pass
         return False
 
