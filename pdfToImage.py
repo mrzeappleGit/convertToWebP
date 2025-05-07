@@ -1,7 +1,7 @@
 import os
 import tkinter as tk
 from tkinter import filedialog, ttk
-import sv_ttk
+# import sv_ttk # No longer setting theme here
 from sys import platform
 import fitz  # PyMuPDF
 from PIL import Image, ImageTk, ImageChops
@@ -14,7 +14,7 @@ class pdfToImageGUI(ttk.Frame):
         self.include_margins = tk.BooleanVar(value=True)  # To store the state of the checkbox
         self.preview_image = None  # Placeholder for the preview image
 
-        sv_ttk.set_theme("dark")
+        # sv_ttk.set_theme("dark") # Remove: Theme is managed globally
         cursor_point = "hand2" if platform != "darwin" else "pointinghand"
 
         # Left side: Input fields and buttons

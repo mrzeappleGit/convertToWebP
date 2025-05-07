@@ -10,7 +10,7 @@ from tkinter import  filedialog
 from tkinter import ttk
 from PIL import Image
 import concurrent.futures
-import sv_ttk
+# import sv_ttk # No longer setting theme here
 import time
 import shutil
 from sys import platform
@@ -21,7 +21,7 @@ class FileRenamerGUI(ttk.Frame):
         
         self.folder_path = tk.StringVar()
         self.single_file_path = tk.StringVar()  # To store the path of the single selected file
-        sv_ttk.set_theme("dark")
+        # sv_ttk.set_theme("dark") # Remove: Theme is managed globally
         cursor_point = "hand2" if platform != "darwin" else "pointinghand"
 
         folder_label = ttk.Label(self, text="Location Folder:")

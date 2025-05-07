@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import re
-import sv_ttk
+# import sv_ttk # No longer setting theme here
 from sys import platform
 
 class TextFormatterGUI(ttk.Frame):
@@ -10,7 +10,7 @@ class TextFormatterGUI(ttk.Frame):
         
         self.text_to_format = tk.StringVar()
         self.formatted_text = tk.StringVar()
-        sv_ttk.set_theme("dark")
+        # sv_ttk.set_theme("dark") # Remove: Theme is managed globally
         cursor_point = "hand2" if platform != "darwin" else "pointinghand"
 
         text_field_label = ttk.Label(self, text="Text to format:")
@@ -54,13 +54,3 @@ def on_closing(root):
     except Exception as e:
         print(f"Error closing the application: {e}")
 
-if __name__ == "__main__":
-    try:
-        root = tk.Tk()
-        root.title("Text Formatter")
-        app = TextFormatterGUI(master=root)
-        app.grid(column=0, row=0, padx=20, pady=20)
-        root.protocol("WM_DELETE_WINDOW", lambda: on_closing(root))
-        root.mainloop()
-    except Exception as e:
-        print(f"Unhandled exception: {e}")

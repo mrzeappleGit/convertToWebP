@@ -15,8 +15,8 @@ class VideoConverterGUI(ttk.Frame):
         
         cursor_point = "hand2" if platform != "darwin" else "pointinghand"
         
-        self.style = ttk.Style(self)
-        self.style.configure("TFrame", background="#1c1c1c")
+        # self.style = ttk.Style(self) # Remove: Style is managed globally
+        # self.style.configure("TFrame", background="#1c1c1c") # Remove: Theme handles frame background
 
         self.folder_path = tk.StringVar()
         self.destination_folder_path = tk.StringVar()

@@ -87,14 +87,14 @@ class SVGCircleGeneratorGUI(ttk.Frame):
 
         # Canvas for Image Display
         # Set initial size, will be adjusted by image loading
-        self.canvas = tk.Canvas(self, bg="#5A6268", width=600, height=400, highlightthickness=0)
+        self.canvas = tk.Canvas(self, width=600, height=400, highlightthickness=0) # Removed bg
         self.canvas.pack(pady=10, padx=10, expand=True, fill=tk.BOTH)
         self.canvas.bind("<Button-1>", self.on_canvas_click) # Bind left mouse click
         self.canvas.bind("<Configure>", self._on_canvas_resize) # Handle window resize
 
         # Label for instructions
         self.instruction_label = ttk.Label(self, text="Load an image to begin.")
-        self.instruction_label.pack(pady=5, padx=10, anchor=tk.W)
+        self.instruction_label.pack(pady=(0,5), padx=10, anchor=tk.W) # Adjusted padding
 
         # Text Area for SVG Output
         self.output_label = ttk.Label(self, text="Generated SVG Path Data:")
@@ -102,7 +102,7 @@ class SVGCircleGeneratorGUI(ttk.Frame):
         self.output_text = scrolledtext.ScrolledText(self, height=4, wrap=tk.WORD, bg="#5A6268", fg="#333333", relief=tk.SOLID, borderwidth=1)
         self.output_text.pack(pady=(0,10), padx=10, fill=tk.X)
         self.output_text.config(state=tk.DISABLED) # Read-only
-
+        
         # --- Manage scrollbar visibility for output_text ---
         # Bind to <Configure> event of the Text component of ScrolledText
         # to re-evaluate scrollbar visibility if its size changes (e.g., due to window resize and fill=X)

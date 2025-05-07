@@ -11,7 +11,7 @@ from tkinter import  filedialog
 from tkinter import ttk
 from PIL import Image
 import concurrent.futures
-import sv_ttk
+# import sv_ttk # No longer setting theme here
 import time
 import shutil
 from sys import platform
@@ -23,8 +23,8 @@ class ImageConverterGUI(ttk.Frame):
         super().__init__(master)
         cursor_point = "hand2" if platform != "darwin" else "pointinghand"
         
-        self.style = ttk.Style(self)
-        self.style.configure("TFrame", background="#1c1c1c")
+        # self.style = ttk.Style(self) # Remove: Style is managed globally
+        # self.style.configure("TFrame", background="#1c1c1c") # Remove: Theme handles frame background
 
         self.folder_path = tk.StringVar()
         self.destination_folder_path = tk.StringVar()
@@ -41,7 +41,7 @@ class ImageConverterGUI(ttk.Frame):
         self.new_width_percentage = tk.IntVar(value=100)
         
         
-        sv_ttk.set_theme("dark")
+        # sv_ttk.set_theme("dark") # Remove: Theme is managed globally
         
 
         folder_label = ttk.Label(self, text="Image/Folder:")

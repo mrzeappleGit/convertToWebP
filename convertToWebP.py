@@ -13,18 +13,20 @@ import re
 import time
 import os
 import tkinter as tk
-from tkinter import filedialog # Corrected import typo: filedialog instead of filedialog
-from tkinter import ttk
+from tkinter import filedialog, BOTH, YES, X # Added X
+import ttkbootstrap as ttk # Changed to use ttkbootstrap's ttk
+from ttkbootstrap.constants import SUCCESS # Import constants like SUCCESS
 from tkinter import messagebox
 import webbrowser
 from PIL import Image, ImageTk
-import concurrent.futures
+# import concurrent.futures # Not directly used in this diff, consider if needed elsewhere
 # from imageManipulationGUI import ImageManipulationGUI # Assuming this might be added later
 import sv_ttk
 # import time # Already imported
 import shutil
 from sys import platform # Keep this for cross-platform checks like cursor
 import requests
+import json # Added for saving/loading settings
 import subprocess
 from datetime import datetime
 # Removed unused imports: numpy, cryptography.fernet
@@ -39,7 +41,7 @@ from textFormatter import TextFormatterGUI
 from svgCircleGenerator import SVGCircleGeneratorGUI # Added Import
 
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.8.3" # Consider updating this if needed
+currentVersion = "1.9.0" # Consider updating this if needed
 
 headers = {
     'User-Agent': f'convertToWebP/{currentVersion}' # Use f-string
@@ -56,13 +58,25 @@ def apply_theme_to_titlebar(tk_window):
         return # Only works on Windows
 
     try:
-        # Get the current theme from sv_ttk
-        theme = sv_ttk.get_theme()
-        # print(f"Applying '{theme}' theme to title bar.") # Debug print
+        # Get the ttkbootstrap style instance
+        # Ensure ttk is imported from ttkbootstrap for this to work as expected
+        # For example: import ttkbootstrap as ttk
+        # If ttk is from tkinter, this won't have .theme.type
+        style = ttk.Style.get_instance() 
 
-        # Determine the value for DwmSetWindowAttribute
-        # 1 for dark, 0 for light
-        value = 1 if theme == "dark" else 0
+        value = 0 # Default to light
+        if hasattr(style, 'theme') and hasattr(style.theme, 'type'):
+            theme_type = style.theme.type  # 'dark' or 'light' for ttkbootstrap themes
+            value = 1 if theme_type == "dark" else 0
+            # print(f"Applying '{theme_type}' (from ttkbootstrap) theme to title bar.")
+        else:
+            # Fallback if ttkbootstrap theme isn't fully set or Style is not from ttkbootstrap
+            print("Warning: ttkbootstrap theme type not found. Falling back for title bar.")
+            try: # Try sv_ttk as a last resort if it was used before
+                sv_theme_type = sv_ttk.get_theme()
+                value = 1 if sv_theme_type == "dark" else 0
+            except Exception:
+                print("Fallback to sv_ttk for title bar also failed. Defaulting to light.")
 
         # Get the window handle (HWND)
         # Using GetParent because winfo_id() often gives the client area handle
@@ -100,6 +114,48 @@ def apply_theme_to_titlebar(tk_window):
     except Exception as e:
         print(f"An unexpected error occurred while applying title bar theme: {e}")
 
+# --- Settings Management Functions ---
+APP_NAME = "WebWeaverKit"
+SETTINGS_FILENAME = "settings.json"
+
+def get_settings_dir():
+    """Gets the application-specific settings directory path."""
+    if sys.platform == "win32":
+        app_data_dir = os.getenv('APPDATA')
+        if app_data_dir:
+            return os.path.join(app_data_dir, APP_NAME)
+    # For macOS and Linux, use a .config directory in the user's home
+    home_dir = os.path.expanduser("~")
+    return os.path.join(home_dir, ".config", APP_NAME)
+
+def get_settings_path():
+    """Gets the full path to the settings file."""
+    return os.path.join(get_settings_dir(), SETTINGS_FILENAME)
+
+def load_settings():
+    """Loads settings from the JSON file."""
+    settings_path = get_settings_path()
+    default_settings = {"theme": "superhero"} # Default theme
+    if os.path.exists(settings_path):
+        try:
+            with open(settings_path, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Error loading settings file ({settings_path}): {e}. Using defaults.")
+            return default_settings
+    return default_settings
+
+def save_settings(settings_data):
+    """Saves settings to the JSON file."""
+    settings_dir = get_settings_dir()
+    os.makedirs(settings_dir, exist_ok=True) # Ensure directory exists
+    settings_path = get_settings_path()
+    try:
+        with open(settings_path, 'w') as f:
+            json.dump(settings_data, f, indent=4)
+        print(f"Settings saved to {settings_path}")
+    except IOError as e:
+        print(f"Error saving settings to {settings_path}: {e}")
 
 class HyperlinkManager:
     # No changes needed in HyperlinkManager
@@ -142,8 +198,26 @@ class HyperlinkManager:
 
 
 class MainApp(tk.Tk):
+    @staticmethod
+    def get_resource_path(relative_path):
+        """Gets the absolute path to a resource, works for dev and PyInstaller"""
+        if hasattr(sys, '_MEIPASS'):
+            # PyInstaller creates a temp folder and stores path in _MEIPASS
+            base_path = sys._MEIPASS
+        else:
+            # Not bundled, use the script's directory
+            if getattr(sys, 'frozen', False): # Running as a frozen executable (not PyInstaller bundle)
+                base_path = os.path.dirname(sys.executable)
+            else: # Running as a script
+                base_path = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base_path, relative_path)
+
     def __init__(self):
         super().__init__()
+        
+        # --- Load settings early ---
+        self.app_settings = load_settings()
+        self.current_selected_theme = self.app_settings.get("theme", "superhero")
         # Removed redundant style creation, sv_ttk handles it
         # self.style = ttk.Style(self)
         # self.style.configure("TFrame", background="#1c1c1c") # sv_ttk handles frame background
@@ -152,23 +226,9 @@ class MainApp(tk.Tk):
 
         self.title("Web Weaver Kit")
 
-        def resource_path(relative_path):
-            # --- Simplified resource_path ---
-            if hasattr(sys, '_MEIPASS'):
-                # PyInstaller creates a temp folder and stores path in _MEIPASS
-                base_path = sys._MEIPASS
-            else:
-                # Use script directory as base path
-                # Handle case where script is run directly vs frozen
-                if getattr(sys, 'frozen', False):
-                    base_path = os.path.dirname(sys.executable)
-                else:
-                    base_path = os.path.dirname(os.path.abspath(__file__))
-            return os.path.join(base_path, relative_path)
-
         # --- Set Icon ---
         try:
-            iconPath = resource_path('convertToWebPIcon.ico')
+            iconPath = MainApp.get_resource_path('convertToWebPIcon.ico')
             if os.path.exists(iconPath):
                  self.iconbitmap(iconPath)
             else:
@@ -177,8 +237,8 @@ class MainApp(tk.Tk):
              # This error often happens on non-Windows systems or if .ico is invalid
              print(f"Warning: Could not set icon ({iconPath}): {e}. Trying .png/.xbm as fallback.")
              # Try PNG fallback (requires Pillow)
-             try:
-                 pngIconPath = resource_path('convertToWebPLogo.png')
+             try: # Nested try for PNG
+                 pngIconPath = MainApp.get_resource_path('convertToWebPLogo.png')
                  if os.path.exists(pngIconPath):
                      img = tk.PhotoImage(file=pngIconPath)
                      self.iconphoto(True, img) # Set icon for window and taskbar
@@ -193,8 +253,12 @@ class MainApp(tk.Tk):
         self.resizable(True, True)
 
         # --- Set Theme AND Apply to Title Bar ---
-        sv_ttk.set_theme("dark") # Set theme early
-        self.update_idletasks() # Ensure window exists before getting HWND
+        # Initialize with a default ttkbootstrap theme
+        # sv_ttk.set_theme("dark") # REMOVE THIS - ttkbootstrap handles it
+        # super().__init__() is called implicitly by tk.Tk, if we want themed window from start:
+        # Apply loaded or default theme
+        self.style = ttk.Style(theme=self.current_selected_theme)
+        self.update_idletasks() # Ensure window exists before getting HWND for title bar
         apply_theme_to_titlebar(self) # <<--- ADDED CALL HERE
 
         self.button_frame = ttk.Frame(self) # Use ttk.Frame for consistency
@@ -258,23 +322,6 @@ class MainApp(tk.Tk):
 
         # Set initial size (optional, can let it auto-size)
         # self.geometry('800x600') # Example initial size
-
-    # --- Add a method to explicitly set the theme and update title bar ---
-    # This could be used if you add a theme toggle feature later.
-    def set_app_theme(self, theme_name):
-        """Sets the sv_ttk theme and updates the title bar."""
-        if theme_name not in ("light", "dark"):
-            print(f"Invalid theme name: {theme_name}. Use 'light' or 'dark'.")
-            return
-        try:
-            sv_ttk.set_theme(theme_name)
-            # No need for update_idletasks here as window exists
-            apply_theme_to_titlebar(self)
-            # You might need to update styles for specific widgets
-            # if they don't update automatically, e.g., HyperlinkManager color
-            # self.configure_widget_styles_for_theme(theme_name)
-        except Exception as e:
-            print(f"Error setting theme '{theme_name}': {e}")
 
 
     def _switch_frame(self, target_frame_name):
@@ -404,16 +451,185 @@ class MainApp(tk.Tk):
             update_label = "! Check for Updates" # Add indicator
 
         self.dropdown_menu.add_command(label=update_label, command=self.check_and_update)
-        # --- Optional: Add Theme Toggle Here ---
-        # current_theme = sv_ttk.get_theme()
-        # next_theme = "light" if current_theme == "dark" else "dark"
-        # self.dropdown_menu.add_command(
-        #     label=f"Switch to {next_theme.capitalize()} Theme",
-        #     command=lambda: self.set_app_theme(next_theme)
-        # )
-        # --- End Optional Theme Toggle ---
+        self.dropdown_menu.add_command(label="Change Theme...", command=self.open_theme_dialog) # New theme option
         self.dropdown_menu.add_command(label="About", command=self.show_about)
         self.dropdown_menu.add_command(label="Licenses", command=self.show_licenses)
+
+    def open_theme_dialog(self):
+        """Opens a Toplevel window to select a ttkbootstrap theme."""
+        dialog = ttk.Toplevel(self)
+        dialog.title("Select Theme")
+        dialog.geometry("700x480") # Increased size for preview
+        dialog.transient(self)
+        dialog.grab_set()
+
+        # Apply title bar theme to the dialog itself
+        dialog.update_idletasks()
+        apply_theme_to_titlebar(dialog)
+
+        # Main container frame in the dialog
+        main_dialog_frame = ttk.Frame(dialog, padding=10)
+        main_dialog_frame.pack(fill=BOTH, expand=YES)
+
+        # Left frame for controls
+        controls_frame = ttk.Frame(main_dialog_frame)
+        controls_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+
+        # Right frame for preview
+        preview_frame = ttk.Frame(main_dialog_frame, padding=5)
+        preview_frame.pack(side=tk.RIGHT, fill=BOTH, expand=YES)
+        # Add a border to the preview frame for better visual separation
+        preview_frame.config(relief="sunken", borderwidth=1)
+
+
+        ttk.Label(controls_frame, text="Choose a theme:").pack(pady=(0, 10), anchor=tk.W)
+
+        style_instance = ttk.Style.get_instance()
+        # print(f"DEBUG: Style instance in dialog: {style_instance}")
+        # print(f"DEBUG: Style instance type: {type(style_instance)}")
+
+        available_themes = []
+        try:
+            available_themes = sorted(style_instance.theme_names())
+            # print(f"DEBUG: Available themes via get_instance(): {available_themes}")
+        except Exception as e:
+            print(f"DEBUG: Error getting theme_names via get_instance(): {e}")
+
+        if not available_themes:
+            # print("DEBUG: No themes found by ttk.Style.get_instance().theme_names(). Attempting fallback.")
+            try:
+                # Fallback: Create a new temporary style object just to get theme names
+                # This can help if get_instance() is returning an uninitialized/different style object
+                temp_style = ttk.Style()
+                available_themes = sorted(temp_style.theme_names())
+                # print(f"DEBUG: Available themes (fallback attempt with new Style()): {available_themes}")
+                if not available_themes:
+                    messagebox.showerror("Theme Error", "No ttkbootstrap themes could be loaded. Please check your ttkbootstrap installation.", parent=dialog)
+                    dialog.destroy()
+                    return
+            except Exception as e_fallback:
+                print(f"DEBUG: Fallback theme loading also failed: {e_fallback}")
+                messagebox.showerror("Theme Error", f"Failed to load themes: {e_fallback}. Check ttkbootstrap installation.", parent=dialog)
+                dialog.destroy()
+                return
+
+        # --- Theme Preview Label ---
+        self.theme_preview_label = ttk.Label(preview_frame, text="Preview N/A", anchor=tk.CENTER)
+        self.theme_preview_label.pack(fill=BOTH, expand=YES, padx=5, pady=5)
+        self.theme_preview_photo = None # To keep a reference to PhotoImage
+        dialog_active = True # Flag to control operations within the dialog
+
+        # --- Function to load and display theme preview ---
+        def load_and_display_theme_preview(theme_name):
+            # Check if the dialog and preview frame still exist
+            # Also check our custom flag
+            if not dialog_active or not dialog.winfo_exists() or not preview_frame.winfo_exists():
+                return # Dialog or frame was destroyed, do nothing
+
+            preview_image_filename = f"{theme_name}.png"
+            preview_image_path = MainApp.get_resource_path(os.path.join("theme_previews", preview_image_filename))
+
+            # Define max preview dimensions
+            max_width = preview_frame.winfo_width() - 20 # Account for padding/border
+            max_height = preview_frame.winfo_height() - 20
+            if max_width <= 0 or max_height <= 0: # If frame not yet sized
+                max_width = 380 # Adjusted default if frame not sized, to fit better
+                max_height = 300
+
+            if os.path.exists(preview_image_path):
+                try:
+                    image = Image.open(preview_image_path)
+                    image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+                    self.theme_preview_photo = ImageTk.PhotoImage(image)
+                    if self.theme_preview_label.winfo_exists(): # Check label too
+                        self.theme_preview_label.config(image=self.theme_preview_photo, text="")
+                        self.theme_preview_label.image = self.theme_preview_photo # Keep reference
+                except Exception as e:
+                    print(f"Error loading preview for {theme_name}: {e}")
+                    if self.theme_preview_label.winfo_exists():
+                        self.theme_preview_label.config(image="", text=f"Error loading\n{theme_name}.png")
+                        self.theme_preview_label.image = None
+            else:
+                if self.theme_preview_label.winfo_exists():
+                    self.theme_preview_label.config(image="", text=f"Preview for\n'{theme_name}'\nnot found.")
+                    self.theme_preview_label.image = None
+            
+            # Ensure the dialog is still active and our flag is set before trying to update it further
+            if dialog_active and dialog.winfo_exists():
+                dialog.update_idletasks()
+
+        # current_theme_in_use = style_instance.theme_use()
+        # print(f"DEBUG: Current theme in use by style_instance: {current_theme_in_use}")
+        # Use a tk.StringVar for the Combobox
+        # Use the theme that was actually applied to the app at startup
+        initial_theme = self.current_selected_theme
+        self.selected_theme_var = tk.StringVar(value=initial_theme)
+
+        theme_combo = ttk.Combobox(
+            controls_frame, # Corrected: Pack into controls_frame
+            textvariable=self.selected_theme_var,
+            values=available_themes,
+            state="readonly",
+            width=20 # Adjusted width
+        )
+        theme_combo.pack(pady=5, anchor=tk.W)
+
+        def on_theme_selected_in_combo(event=None): # Can be called by event or directly
+            # Check if the dialog and combobox still exist
+            if not dialog_active or not dialog.winfo_exists() or not theme_combo.winfo_exists():
+                return
+            selected_theme = self.selected_theme_var.get() # Get theme only if combo exists
+            load_and_display_theme_preview(selected_theme) # Call preview update
+
+        theme_combo.bind("<<ComboboxSelected>>", on_theme_selected_in_combo)
+        
+        def safe_dialog_destroy():
+            nonlocal dialog_active
+            dialog_active = False # Signal that dialog operations should cease
+            if dialog and dialog.winfo_exists():
+                dialog.destroy()
+
+        def apply_theme_action():
+            nonlocal dialog_active
+            # Get the chosen theme *before* disabling anything
+            chosen_theme = self.selected_theme_var.get()
+
+            # Immediately disable the combobox to prevent further events or access
+            if theme_combo.winfo_exists():
+                theme_combo.config(state=tk.DISABLED)
+
+            # Save the chosen theme to settings *before* attempting to apply it visually
+            self.app_settings["theme"] = chosen_theme
+            save_settings(self.app_settings)
+            print(f"Theme '{chosen_theme}' saved to settings.")
+            try:
+                style_instance.theme_use(chosen_theme)
+                print(f"Theme changed to: {chosen_theme}")
+                # Update title bar for main window and any other open Toplevels
+                apply_theme_to_titlebar(self)
+                for child_widget in self.winfo_children():
+                    if isinstance(child_widget, tk.Toplevel):
+                        if child_widget.winfo_exists(): # Check if child toplevel still exists
+                            apply_theme_to_titlebar(child_widget)
+                # Visual application successful
+            except tk.TclError as e:
+                # Instead of showing a messagebox, print the error to the console
+                print(f"Theme Error: Could not apply theme '{chosen_theme}'.\n{e}")
+            
+            # Schedule the dialog destruction to happen after current event processing
+            self.after_idle(safe_dialog_destroy)
+
+        apply_button = ttk.Button(controls_frame, text="Apply", command=apply_theme_action, bootstyle=SUCCESS)
+        apply_button.pack(pady=(20,0), anchor=tk.W)
+
+        # Load initial preview after dialog elements are packed and sized
+        if dialog.winfo_exists(): # Check before calling update_idletasks and loading preview
+            dialog.update_idletasks() # Ensure preview_frame has dimensions
+            on_theme_selected_in_combo() # Load preview for the initially selected theme
+        
+        # Override the dialog's close button (X) to also use safe_dialog_destroy
+        if dialog.winfo_exists():
+            dialog.protocol("WM_DELETE_WINDOW", safe_dialog_destroy)
 
     def periodic_check_for_updates(self):
         print("Performing periodic update check...")
@@ -477,23 +693,13 @@ class MainApp(tk.Tk):
         apply_theme_to_titlebar(about_win) # <<--- APPLY THEME TO TOPLEVEL
 
         # Use the same resource_path function as in __init__
-        def resource_path(relative_path):
-             if hasattr(sys, '_MEIPASS'):
-                 base_path = sys._MEIPASS
-             else:
-                 if getattr(sys, 'frozen', False):
-                     base_path = os.path.dirname(sys.executable)
-                 else:
-                     base_path = os.path.dirname(os.path.abspath(__file__))
-             return os.path.join(base_path, relative_path)
-
         # --- Set Icon for About Window ---
         try:
-            iconPath = resource_path('convertToWebPIcon.ico')
+            iconPath = MainApp.get_resource_path('convertToWebPIcon.ico')
             if os.path.exists(iconPath):
                  about_win.iconbitmap(iconPath)
             else: # Try PNG fallback
-                 pngIconPath = resource_path('convertToWebPLogo.png')
+                 pngIconPath = MainApp.get_resource_path('convertToWebPLogo.png')
                  if os.path.exists(pngIconPath):
                      img = tk.PhotoImage(file=pngIconPath)
                      about_win.iconphoto(True, img)
@@ -502,7 +708,7 @@ class MainApp(tk.Tk):
 
         # --- Load and display the image ---
         try:
-            image_path = resource_path('convertToWebPLogo.png')
+            image_path = MainApp.get_resource_path('convertToWebPLogo.png')
             if os.path.exists(image_path):
                 logo_image_pil = Image.open(image_path)
                 desired_size = (128, 128) # Smaller logo
@@ -578,8 +784,7 @@ class MainApp(tk.Tk):
         # --- Text Area ---
         # Let sv_ttk handle the text widget styling if possible
         text = tk.Text(text_frame, wrap='word', font=('TkDefaultFont', 10), height=15,
-                       # bg="#2b2b2b", fg="white", # Comment out fixed colors
-                       insertbackground="white", # Keep insert color distinct? Or use theme?
+                       # insertbackground="white", # Let theme handle this
                        relief="flat",
                        borderwidth=0, highlightthickness=0) # Basic styling, remove border
         # --- Scrollbar ---
@@ -881,5 +1086,13 @@ def is_update_available(current_v):
 if __name__ == "__main__":
     # Required for multiprocessing support when bundled with PyInstaller
     multiprocessing.freeze_support()
-    app = MainApp()
+    
+    # To initialize with a ttkbootstrap theme from the start for the MainApp (tk.Tk)
+    # we need to make MainApp a ttk.Window or apply style before widgets are created.
+    # For simplicity, let's assume MainApp itself is a tk.Tk window and widgets inside will pick up the theme.
+    # If MainApp were a ttk.Window, it would be: app = MainApp(themename="superhero")
+    app = MainApp() 
+    # The theme is now loaded and applied within MainApp.__init__
+    # So, this line is no longer strictly needed here, but ensure self.style is set in __init__
+    # app.style = ttk.Style(theme=app.current_selected_theme) # This is now done inside __init__
     app.mainloop()
