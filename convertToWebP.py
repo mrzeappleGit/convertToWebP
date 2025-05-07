@@ -150,7 +150,7 @@ class MainApp(tk.Tk):
 
         cursor_point = "hand2" if platform != "darwin" else "pointinghand" # Use standard cursor name
 
-        self.title("Universal File & WebP Tool Set")
+        self.title("Web Weaver Kit")
 
         def resource_path(relative_path):
             # --- Simplified resource_path ---
