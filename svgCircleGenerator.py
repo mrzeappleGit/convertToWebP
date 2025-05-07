@@ -87,7 +87,7 @@ class SVGCircleGeneratorGUI(ttk.Frame):
 
         # Canvas for Image Display
         # Set initial size, will be adjusted by image loading
-        self.canvas = tk.Canvas(self, bg="#dddddd", width=600, height=400, highlightthickness=0)
+        self.canvas = tk.Canvas(self, bg="#5A6268", width=600, height=400, highlightthickness=0)
         self.canvas.pack(pady=10, padx=10, expand=True, fill=tk.BOTH)
         self.canvas.bind("<Button-1>", self.on_canvas_click) # Bind left mouse click
         self.canvas.bind("<Configure>", self._on_canvas_resize) # Handle window resize
@@ -99,9 +99,15 @@ class SVGCircleGeneratorGUI(ttk.Frame):
         # Text Area for SVG Output
         self.output_label = ttk.Label(self, text="Generated SVG Path Data:")
         self.output_label.pack(padx=10, anchor=tk.W)
-        self.output_text = scrolledtext.ScrolledText(self, height=4, wrap=tk.WORD, bg="#f0f0f0", fg="#333333", relief=tk.SOLID, borderwidth=1)
+        self.output_text = scrolledtext.ScrolledText(self, height=4, wrap=tk.WORD, bg="#5A6268", fg="#333333", relief=tk.SOLID, borderwidth=1)
         self.output_text.pack(pady=(0,10), padx=10, fill=tk.X)
         self.output_text.config(state=tk.DISABLED) # Read-only
+
+        # --- Manage scrollbar visibility for output_text ---
+        # Bind to <Configure> event of the Text component of ScrolledText
+        # to re-evaluate scrollbar visibility if its size changes (e.g., due to window resize and fill=X)
+        self.output_text.bind("<Configure>", self._manage_scrollbar_visibility)
+        # Initial check will be triggered by _update_mode -> clear_shapes -> _update_output_text
 
         # Initial UI setup based on mode
         self._update_mode()
@@ -568,6 +574,32 @@ class SVGCircleGeneratorGUI(ttk.Frame):
         self.output_text.delete('1.0', tk.END)
         self.output_text.insert(tk.END, self.generated_svg_path)
         self.output_text.config(state=tk.DISABLED)
+        self._manage_scrollbar_visibility() # Update scrollbar based on new content
+
+    def _manage_scrollbar_visibility(self, event=None):
+        """Shows or hides the scrollbar for output_text based on content."""
+        if not hasattr(self.output_text, 'vbar') or not self.output_text.vbar:
+            return # Should not happen with ScrolledText
+
+        # Force Tkinter to update layout and pending tasks to get accurate yview
+        self.output_text.update_idletasks()
+
+        first, last = self.output_text.yview()
+
+        # If first is 0.0 and last is 1.0, all content is visible
+        if first == 0.0 and last == 1.0:
+            # Content fits, hide scrollbar if it's currently visible
+            if self.output_text.vbar.winfo_ismapped():
+                self.output_text.vbar.pack_forget()
+        else:
+            # Content overflows, show scrollbar if it's currently hidden
+            if not self.output_text.vbar.winfo_ismapped():
+                # Re-pack the scrollbar. ScrolledText internally packs the Text widget
+                # to the LEFT and the Scrollbar to the RIGHT within its internal frame.
+                # We replicate the original packing for the scrollbar.
+                self.output_text.vbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+
 
     # --- Utility and State Management ---
 

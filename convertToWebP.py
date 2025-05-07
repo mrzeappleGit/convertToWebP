@@ -39,7 +39,7 @@ from textFormatter import TextFormatterGUI
 from svgCircleGenerator import SVGCircleGeneratorGUI # Added Import
 
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.8.1" # Consider updating this if needed
+currentVersion = "1.8.3" # Consider updating this if needed
 
 headers = {
     'User-Agent': f'convertToWebP/{currentVersion}' # Use f-string
@@ -209,7 +209,7 @@ class MainApp(tk.Tk):
             ("PDF to Image", self.show_pdf_to_image, "pdf_to_image"),
             ("Video Converter", self.show_video_converter, "video_converter"),
             ("Text Formatter", self.show_text_converter, "text_formatter"),
-            ("SVG Circle Gen", self.show_svg_generator, "svg_generator") # Added SVG Generator Button
+            ("Image Mapping Tool", self.show_svg_generator, "svg_generator") # Added SVG Generator Button
         ]
 
         for text, command, name in button_defs:
