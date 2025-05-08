@@ -41,7 +41,7 @@ from textFormatter import TextFormatterGUI
 from svgCircleGenerator import SVGCircleGeneratorGUI # Added Import
 
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.9.0" # Consider updating this if needed
+currentVersion = "1.9.1" # Consider updating this if needed
 
 headers = {
     'User-Agent': f'convertToWebP/{currentVersion}' # Use f-string
@@ -214,6 +214,10 @@ class MainApp(tk.Tk):
 
     def __init__(self):
         super().__init__()
+        # TRY THIS: Force Tkinter to process pending events before setting icon
+        # This can sometimes help with icon display issues.
+        self.update_idletasks()
+
         
         # --- Load settings early ---
         self.app_settings = load_settings()
@@ -229,8 +233,13 @@ class MainApp(tk.Tk):
         # --- Set Icon ---
         try:
             iconPath = MainApp.get_resource_path('convertToWebPIcon.ico')
+            # DEBUGGING: Print information about the icon path and existence
+            print(f"DEBUG: Attempting to load icon from: {iconPath}")
+            print(f"DEBUG: Icon file exists at resolved path: {os.path.exists(iconPath)}")
+
             if os.path.exists(iconPath):
                  self.iconbitmap(iconPath)
+                 print("DEBUG: self.iconbitmap() called successfully.")
             else:
                  print(f"Warning: Icon file not found at {iconPath}")
         except tk.TclError as e:
@@ -259,7 +268,7 @@ class MainApp(tk.Tk):
         # Apply loaded or default theme
         self.style = ttk.Style(theme=self.current_selected_theme)
         self.update_idletasks() # Ensure window exists before getting HWND for title bar
-        apply_theme_to_titlebar(self) # <<--- ADDED CALL HERE
+        apply_theme_to_titlebar(self)
 
         self.button_frame = ttk.Frame(self) # Use ttk.Frame for consistency
         self.button_frame.pack(side="top", fill="x", padx=5, pady=5) # Add some padding
@@ -901,144 +910,292 @@ SOFTWARE."""
 # === Helper Functions (Outside Class - No changes here related to title bar) ===
 
 def download_update(download_url):
-    """Downloads the update file from the given URL."""
-    download_path = 'latest_app_update.exe' # Use a distinct name
+    download_path = 'latest_app_update.exe'
     print(f"Downloading update from: {download_url}")
+    file = None  # Initialize file to None
     try:
-        response = requests.get(download_url, stream=True, headers=headers, timeout=300) # Added timeout
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+        response = requests.get(download_url, stream=True, headers=headers, timeout=300)
+        response.raise_for_status()
 
         total_size = int(response.headers.get('content-length', 0))
-        block_size = 8192 # Increased block size
-        start_time = time.time()
+        block_size = 8192
         downloaded_size = 0
 
-        # --- Simple Progress Bar in Console ---
-        progress_bar_length = 40
         print("Downloading:")
-        sys.stdout.write("[%s]" % (" " * progress_bar_length))
-        sys.stdout.flush()
-        sys.stdout.write("\b" * (progress_bar_length+1)) # return to start of line
+        # ... (progress bar init) ...
 
-        with open(download_path, 'wb') as file:
-            for chunk in response.iter_content(chunk_size=block_size):
-                file.write(chunk)
-                downloaded_size += len(chunk)
-                if total_size > 0:
-                    # Avoid division by zero if total_size is somehow 0
-                    percent_float = (downloaded_size / total_size) if total_size > 0 else 0
-                    percent_int = int(progress_bar_length * percent_float)
-                    # Ensure percent_int doesn't exceed length due to float inaccuracies
-                    percent_int = min(percent_int, progress_bar_length)
+        # Attempt to open the file
+        try:
+            file = open(download_path, 'wb')
+        except IOError as ioe:
+            print(f"\nError: Failed to open file {download_path} for writing: {ioe}")
+            messagebox.showerror("Download Error", f"Could not open file for download: {ioe}")
+            return False # Exit the function as we can't proceed
 
-                    sys.stdout.write("-" * percent_int)
-                    sys.stdout.write(" " * (progress_bar_length - percent_int))
-                    sys.stdout.write("] %d%%" % int(100 * percent_float))
-                    sys.stdout.flush()
-                    # Adjust backspace count: bar length + start/end brackets + space + percentage (e.g., " 99%") = 4
-                    backspace_count = progress_bar_length + 2 + 4
-                    sys.stdout.write("\b" * backspace_count) # Adjust backspace count
+        # If file was opened successfully
+        for chunk in response.iter_content(chunk_size=block_size):
+            if file: # Double check file is not None (though it shouldn't be if open succeeded)
+                try:
+                    file.write(chunk)
+                except IOError as ioe_write:
+                    print(f"\nError writing to file {download_path}: {ioe_write}")
+                    messagebox.showerror("Download Error", f"Error during file write: {ioe_write}")
+                    # Attempt to close and remove partial file
+                    if file and not file.closed:
+                        file.close()
+                    if os.path.exists(download_path):
+                        try:
+                            os.remove(download_path)
+                        except OSError as oe_remove:
+                            print(f"Error removing partial download {download_path}: {oe_remove}")
+                    return False # Exit on write error
+            else:
+                # This case should ideally not be reached if open() fails and returns earlier
+                print(f"\nError: File object is None before writing chunk. This should not happen.")
+                return False
 
+            downloaded_size += len(chunk)
+            # ... (progress bar update) ...
 
-        sys.stdout.write("-" * progress_bar_length) # Fill bar at end
-        sys.stdout.write("] 100%\n")
-        sys.stdout.flush()
+        # ... (progress bar completion) ...
         print(f"Download complete: {download_path}")
         return True
 
     except requests.exceptions.RequestException as e:
         print(f"\nError downloading update (RequestException): {e}")
         messagebox.showerror("Download Error", f"Network error during download: {e}")
-    except Exception as e:
+    except Exception as e: # General exception
         print(f"\nError downloading update (General): {e}")
         messagebox.showerror("Download Error", f"An error occurred during download: {e}")
+    finally:
+        if file and not file.closed:
+            file.close()
+        # If not successful and file exists (and we didn't return True), clean up
+        # This part needs more robust logic to determine if cleanup is needed based on return status
+        # For example, only remove if the function is about to return False AND file exists
 
-    # Cleanup failed download
-    if os.path.exists(download_path):
-        try:
-            os.remove(download_path)
-        except OSError as oe:
-            print(f"Error removing incomplete download {download_path}: {oe}")
+    # Cleanup failed download (if not already handled and function is returning False)
+    # This needs careful placement based on the success flag
+    # For now, let's assume if we reach here and didn't return True, it's a failure
+    # if not 'download_successful_flag': # You'd need a flag
+    #     if os.path.exists(download_path):
+    #         try:
+    #             os.remove(download_path)
+    #         except OSError as oe:
+    #             print(f"Error removing incomplete download {download_path}: {oe}")
     return False
 
 
 def apply_update():
-    """Applies the downloaded update using a helper batch script."""
+    """
+    Applies the downloaded update using a helper batch script.
+    Includes a preliminary test for simple silent command execution.
+    """
     update_exe = 'latest_app_update.exe'
     helper_bat = 'update_helper.bat'
+    simple_test_log_filename = "simple_silent_test_output.txt"
+    main_update_log_filename = "update_log.txt"
 
-    if not os.path.exists(update_exe):
-        print("Update file not found.")
-        messagebox.showerror("Update Error", "Update file not found. Please download again.")
+    # Determine current directory correctly (for script or frozen executable)
+    if getattr(sys, 'frozen', False):
+        current_dir = os.path.dirname(sys.executable)
+    else:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Define full paths
+    update_exe_path = os.path.join(current_dir, update_exe)
+    helper_bat_path = os.path.join(current_dir, helper_bat)
+    simple_test_log_path = os.path.join(current_dir, simple_test_log_filename)
+    main_log_file_path = os.path.join(current_dir, main_update_log_filename) # For the main bat script
+
+    if not os.path.exists(update_exe_path):
+        print(f"Update file not found at: {update_exe_path}")
+        messagebox.showerror("Update Error", f"Update file '{update_exe}' not found. Please download again.")
         return False
 
     try:
-        current_exe = os.path.basename(sys.executable)
-        # Ensure we get the correct directory, especially when frozen
-        if getattr(sys, 'frozen', False):
-            current_dir = os.path.dirname(sys.executable)
-        else:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
+        current_exe_name = os.path.basename(sys.executable)
+        target_exe_path = os.path.join(current_dir, current_exe_name)
 
-        target_exe_path = os.path.join(current_dir, current_exe)
-        update_exe_path = os.path.join(current_dir, update_exe) # Ensure full path
+        print(f"Current executable name: {current_exe_name}")
+        print(f"Current executable target path: {target_exe_path}")
+        print(f"Update file source path: {update_exe_path}")
+        print(f"Helper batch script will be at: {helper_bat_path}")
+        print(f"Main update log will be at: {main_log_file_path}")
 
-        print(f"Current executable: {target_exe_path}")
-        print(f"Update file: {update_exe_path}")
-
-        # Create the helper script in the same directory
-        helper_bat_path = os.path.join(current_dir, helper_bat)
-
+        # --- Create the helper batch script ---
         with open(helper_bat_path, 'w') as bat_file:
             bat_file.write("@echo off\n")
-            bat_file.write("echo Waiting for application to close...\n")
-            bat_file.write("timeout /t 3 /nobreak > NUL\n") # Short delay
-            bat_file.write(f"echo Attempting to terminate {current_exe}...\n")
-            # Use taskkill with quotes around the image name in case of spaces
-            bat_file.write(f"taskkill /IM \"{current_exe}\" /F > NUL 2>&1\n")
+            # Initial log entry for the main batch script
+            bat_file.write(f"(echo ---------- %DATE% %TIME% - Main Update Attempt Starting ----------) > \"{main_log_file_path}\"\n")
+            bat_file.write(f"echo %DATE% %TIME% - Starting update_helper.bat >> \"{main_log_file_path}\"\n")
+            bat_file.write(f"echo %DATE% %TIME% - Current directory (from bat): %CD% >> \"{main_log_file_path}\"\n")
+            bat_file.write(f"echo %DATE% %TIME% - Target exe for bat: {target_exe_path} >> \"{main_log_file_path}\"\n")
+            bat_file.write(f"echo %DATE% %TIME% - Update exe for bat: {update_exe_path} >> \"{main_log_file_path}\"\n")
+
+            bat_file.write("timeout /t 3 /nobreak > NUL\n") # Wait for app to close
+            bat_file.write(f"taskkill /IM \"{current_exe_name}\" /F > NUL 2>&1\n")
+            bat_file.write(f"echo %DATE% %TIME% - Taskkill for {current_exe_name} attempted. Result: %errorlevel% >> \"{main_log_file_path}\"\n")
             bat_file.write("timeout /t 2 /nobreak > NUL\n") # Wait after kill
-            bat_file.write(f"echo Replacing application file...\n")
-            # Use move command, /Y overwrites without prompting. Quote paths.
+
             bat_file.write(f"move /Y \"{update_exe_path}\" \"{target_exe_path}\"\n")
-            # Check if move was successful (errorlevel 0)
-            bat_file.write("if errorlevel 1 (\n")
-            bat_file.write("  echo ERROR: Failed to replace the application file.\n")
-            bat_file.write("  echo Please ensure the application is closed and try updating manually.\n")
-            bat_file.write("  pause\n") # Pause so user can see error
-            # Attempt to delete downloaded file on failure, quote path
+            move_errorlevel_var = "%errorlevel%" # Capture errorlevel immediately
+            bat_file.write(f"echo %DATE% %TIME% - Move command ('{update_exe_path}' to '{target_exe_path}') executed. Errorlevel: {move_errorlevel_var} >> \"{main_log_file_path}\"\n")
+
+            bat_file.write(f"if {move_errorlevel_var} NEQ 0 (\n")
+            bat_file.write(f"  echo %DATE% %TIME% - ERROR: Failed to replace the application file. Errorlevel: {move_errorlevel_var} >> \"{main_log_file_path}\"\n")
+            bat_file.write(f"  echo %DATE% %TIME% - Update source: \"{update_exe_path}\" >> \"{main_log_file_path}\"\n")
+            bat_file.write(f"  echo %DATE% %TIME% - Update target: \"{target_exe_path}\" >> \"{main_log_file_path}\"\n")
             bat_file.write(f"  if exist \"{update_exe_path}\" del \"{update_exe_path}\" > NUL 2>&1\n")
-            bat_file.write("  goto cleanup\n") # Go to cleanup section
+            bat_file.write("  goto cleanup\n")
             bat_file.write(")\n")
-            bat_file.write(f"echo Relaunching application...\n")
-            # Use start command to launch detached. Quote path.
-            bat_file.write(f"start \"\" \"{target_exe_path}\"\n")
-            # Label for cleanup
+
+            bat_file.write(f"echo %DATE% %TIME% - Application replaced successfully. Relaunching... >> \"{main_log_file_path}\"\n")
+            bat_file.write(f"start \"Relaunching {current_exe_name}\" \"{target_exe_path}\"\n")
+            bat_file.write(f"echo %DATE% %TIME% - Relaunch command for {target_exe_path} issued. >> \"{main_log_file_path}\"\n")
+
             bat_file.write(":cleanup\n")
-            bat_file.write("echo Cleaning up...\n")
-            # Self-delete the batch file
-            bat_file.write("(goto) 2>nul & del \"%~f0\"\n") # Self-deletion technique
+            bat_file.write(f"echo %DATE% %TIME% - Starting cleanup of {helper_bat} >> \"{main_log_file_path}\"\n")
+            bat_file.write("(goto) 2>nul & del \"%~f0\"\n") # Self-delete
+            bat_file.write("exit /b %errorlevel%\n") # Exit batch script
 
-        print(f"Created {helper_bat_path}")
+        print(f"Successfully created helper batch script: {helper_bat_path}")
 
-        # Start the helper script without showing the command prompt window
-        # Use DETACHED_PROCESS flag for independent execution
-        # Ensure the path to the batch file is used
-        # Add CREATE_NO_WINDOW to hide the console window completely
-        creation_flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-        subprocess.Popen([helper_bat_path], creationflags=creation_flags, close_fds=True)
-        print(f"Launched {helper_bat_path}")
+        if not os.path.exists(helper_bat_path):
+            print(f"CRITICAL ERROR: Batch file {helper_bat_path} was NOT found right before execution!")
+            messagebox.showerror("Update Error", f"Failed to create or find the update helper script at {helper_bat_path}.")
+            return False
 
-        # The application should exit here to allow replacement
+        # --- TEMPORARY TEST FOR SILENT CMD EXECUTION ---
+        print("\n--- Starting Simple Silent CMD Test ---")
+        print(f"Python current working directory: {os.getcwd()}") # For context
+        print(f"Target directory for simple test log: {current_dir}")
+        print(f"Simple test log file will be: {simple_test_log_path}")
+
+        # Command to create a file with some text
+        simple_command_string = f'echo %DATE% %TIME% - Simple silent test successful > "{simple_test_log_path}"'
+        simple_command_list_for_popen = ['cmd.exe', '/c', simple_command_string]
+
+        # Flags for the simple test: CREATE_NO_WINDOW and CREATE_NEW_PROCESS_GROUP.
+        # DETACHED_PROCESS is omitted initially for simpler synchronous testing.
+        simple_creation_flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+        # Alternative for testing if DETACHED_PROCESS is the issue with CREATE_NO_WINDOW:
+        # simple_creation_flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+
+        print(f"Attempting simple silent command via Popen: {simple_command_list_for_popen}")
+        print(f"Simple test creation_flags: {simple_creation_flags}")
+        simple_test_succeeded = False
+        try:
+            # For this test, run synchronously if DETACHED_PROCESS is not in simple_creation_flags
+            proc = subprocess.Popen(
+                simple_command_list_for_popen,
+                creationflags=simple_creation_flags,
+                cwd=current_dir,
+                close_fds=True
+            )
+            if not (simple_creation_flags & subprocess.DETACHED_PROCESS):
+                # Only wait if not detached, otherwise Popen returns immediately
+                proc.wait(timeout=10) # Wait up to 10 seconds for the simple echo to complete
+                print(f"Simple command Popen completed, return code: {proc.returncode}")
+            else:
+                print("Simple command Popen launched (detached). Will check file existence shortly.")
+                # If detached, we can't use proc.wait() reliably here for file check.
+                # We'll rely on os.path.exists after a brief pause.
+                # import time # Make sure time is imported if you use this
+                # time.sleep(1) # Give it a moment to execute if detached
+
+            # Check for file creation after Popen call
+            # A small delay might be needed if the process is detached and runs very quickly
+            if not (simple_creation_flags & subprocess.DETACHED_PROCESS):
+                 pass # Already waited
+            else: # If detached, give it a moment
+                 import time
+                 time.sleep(0.5)
+
+
+            if os.path.exists(simple_test_log_path):
+                print(f"SUCCESS: Simple silent test CREATED file: {simple_test_log_path}")
+                try:
+                    with open(simple_test_log_path, "r") as f:
+                        print(f"Simple test file content: '{f.read().strip()}'")
+                    simple_test_succeeded = True
+                except Exception as e:
+                    print(f"Error reading simple test log file: {e}")
+                # os.remove(simple_test_log_path) # Clean up test file
+            else:
+                print(f"FAILURE: Simple silent test DID NOT create file: {simple_test_log_path}")
+                print("This suggests an issue with CREATE_NO_WINDOW or permissions for cmd.exe to write files when hidden.")
+
+        except subprocess.TimeoutExpired:
+            print("FAILURE: Simple silent command (proc.wait) timed out.")
+            print(f"Check if '{simple_test_log_path}' was created despite timeout.")
+        except Exception as e:
+            print(f"ERROR launching simple silent command: {e}")
+            if hasattr(e, 'winerror'):
+                print(f"WinError: {e.winerror}")
+        print("--- Finished Simple Silent CMD Test ---\n")
+
+        # --- Decide how to proceed with the actual batch file ---
+        # For now, we'll always attempt the main batch file launch
+        # You might add logic here to fall back to a visible launch if simple_test_succeeded is False
+
+        # --- Launch the main update helper batch script ---
+        main_command_list = ['cmd.exe', '/c', helper_bat_path]
+        # These are the flags intended for the final silent operation
+        main_creation_flags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+
+        print(f"Attempting to launch actual update batch script: {main_command_list}")
+        print(f"Using main creation_flags: {main_creation_flags}")
+        try:
+            subprocess.Popen(
+                main_command_list,
+                creationflags=main_creation_flags,
+                close_fds=True,
+                cwd=current_dir
+            )
+            print(f"Launched {helper_bat_path} (Python believes it's running silently and detached).")
+            print(f"Check '{main_log_file_path}' for progress after a few seconds.")
+
+        except OSError as ose:
+            print(f"ERROR during main subprocess.Popen (OSError): {ose}")
+            if ose.winerror:
+                print(f"Windows specific error code: {ose.winerror}")
+            messagebox.showerror("Update Error", f"Failed to launch update script (OS Error {ose.winerror if ose.winerror else ''}): {ose.strerror}")
+            return False
+        except Exception as popen_e:
+            print(f"ERROR during main subprocess.Popen (General Exception): {popen_e}")
+            messagebox.showerror("Update Error", f"Failed to launch the update script: {popen_e}")
+            return False
+
+        print("Application should be exiting now to allow update to complete...")
+        return True # Signal that update process was initiated
+
+    except Exception as e:
+        print(f"Outer error in apply_update function: {e}")
+        messagebox.showerror("Update Error", f"A critical error occurred while preparing the update: {e}")
+        # Clean up helper script if it was created and an error occurred before Popen
+        if os.path.exists(helper_bat_path):
+            try:
+                os.remove(helper_bat_path)
+                print(f"Cleaned up {helper_bat_path} due to error.")
+            except OSError as oe_remove:
+                print(f"Error removing {helper_bat_path} during error cleanup: {oe_remove}")
+        return False
+
+
+
         print("Application exiting to allow update...")
-        return True # Signal that update process started
+        return True
 
     except Exception as e:
         print(f"Error preparing update application: {e}")
         messagebox.showerror("Update Error", f"Could not prepare the update process: {e}")
-        # Cleanup helper script if created
-        helper_bat_path_cleanup = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__)), helper_bat)
-        if os.path.exists(helper_bat_path_cleanup):
-             try: os.remove(helper_bat_path_cleanup)
+        final_helper_bat_path = os.path.join(
+            os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__)),
+            helper_bat
+        )
+        if os.path.exists(final_helper_bat_path):
+             try: os.remove(final_helper_bat_path)
              except OSError: pass
         return False
 
