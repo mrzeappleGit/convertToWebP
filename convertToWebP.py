@@ -41,7 +41,7 @@ from textFormatter import TextFormatterGUI
 from svgCircleGenerator import SVGCircleGeneratorGUI # Added Import
 
 SERVER_URL = "http://webp.mts-studios.com:5000/current_version"
-currentVersion = "1.9.1" # Consider updating this if needed
+currentVersion = "1.9.2" # Consider updating this if needed
 
 headers = {
     'User-Agent': f'convertToWebP/{currentVersion}' # Use f-string
