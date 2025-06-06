@@ -694,12 +694,13 @@ class MainApp(tk.Tk):
         about_win.transient(self) # Make it transient to the main window
         about_win.grab_set()      # Grab focus
         about_win.resizable(False, False)
+        
+        # Ensure an explicit size is set, e.g.:
+        about_win.geometry("350x300") 
 
         # --- Apply Title Bar Theme to Toplevel ---
-        # Need to ensure sv_ttk theme is applied to Toplevels if needed
-        # sv_ttk might handle this, but explicit call ensures title bar matches.
-        about_win.update_idletasks() # Ensure window exists for HWND
-        apply_theme_to_titlebar(about_win) # <<--- APPLY THEME TO TOPLEVEL
+        about_win.update_idletasks() 
+        apply_theme_to_titlebar(about_win)
 
         # Use the same resource_path function as in __init__
         # --- Set Icon for About Window ---
@@ -720,34 +721,31 @@ class MainApp(tk.Tk):
             image_path = MainApp.get_resource_path('convertToWebPLogo.png')
             if os.path.exists(image_path):
                 logo_image_pil = Image.open(image_path)
-                desired_size = (128, 128) # Smaller logo
+                desired_size = (128, 128) 
                 logo_image_pil = logo_image_pil.resize(desired_size, Image.Resampling.LANCZOS)
                 logo_photo = ImageTk.PhotoImage(logo_image_pil)
                 logo_label = ttk.Label(about_win, image=logo_photo)
-                logo_label.image = logo_photo # Keep reference
+                logo_label.image = logo_photo 
                 logo_label.pack(pady=10)
-            else:
-                 print(f"Warning: Logo file not found at {image_path}")
+            # ... (else and except clauses) ...
         except Exception as e:
             print(f"Error loading logo: {e}")
 
-
         ttk.Label(about_win, text=f"Version: {currentVersion}").pack(pady=5)
 
-        # --- Style for hyperlink labels ---
-        # Ensure the style is configured before creating labels that use it
-        style = ttk.Style()
-        # Use a distinct style name like "Hyperlink.TLabel"
-        # Using 'cyan' as before, but ideally use a theme color like 'link.fg' if defined
-        style.configure("Hyperlink.TLabel", foreground="cyan", underline=True)
+        # --- Temporarily simplify the labels ---
+        # style = ttk.Style() # Keep this commented out for now
+        # style.configure("Hyperlink.TLabel", foreground="cyan", underline=True) # Keep commented
 
-        copyright_label = ttk.Label(about_win, text="©2024 Matthew Thomas Stevens Studios LLC", cursor="hand2", style="Hyperlink.TLabel")
+        copyright_label = ttk.Label(about_win, text="©2025 Matthew Thomas Stevens Studios LLC") # No custom style or cursor
         copyright_label.pack(pady=5)
+        # You can keep the bind to see if clicking works if it appears
         copyright_label.bind("<Button-1>", lambda e: webbrowser.open("https://www.matthewstevens.me"))
 
-        link_label = ttk.Label(about_win, text="Visit GitHub Repo", cursor="hand2", style="Hyperlink.TLabel")
+        link_label = ttk.Label(about_win, text="Visit GitHub Repo") # No custom style or cursor
         link_label.pack(pady=5)
         link_label.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/mrzeappleGit/convertToWebP"))
+
 
 
         # Center the window relative to the main window
