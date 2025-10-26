@@ -4,32 +4,26 @@ if sys.platform == "win32":
     import ctypes
     from ctypes import wintypes
 
-# --- Existing imports ---
-from multiprocessing import Process, Queue, cpu_count
+# --- Standard library imports ---
 import multiprocessing
-from multiprocessing.dummy import Pool
-import re
-# import sys # Already imported above
-import time
 import os
-import tkinter as tk
-from tkinter import filedialog, BOTH, YES, X # Added X
-import ttkbootstrap as ttk # Changed to use ttkbootstrap's ttk
-from ttkbootstrap.constants import SUCCESS # Import constants like SUCCESS
-from tkinter import messagebox
-import webbrowser
-from PIL import Image, ImageTk
-# import concurrent.futures # Not directly used in this diff, consider if needed elsewhere
-# from imageManipulationGUI import ImageManipulationGUI # Assuming this might be added later
-import sv_ttk
-# import time # Already imported
 import shutil
-from sys import platform # Keep this for cross-platform checks like cursor
-import requests
-import json # Added for saving/loading settings
 import subprocess
+import time
+import webbrowser
 from datetime import datetime
-# Removed unused imports: numpy, cryptography.fernet
+from sys import platform
+from tkinter import BOTH, YES, X, messagebox
+
+# --- Third-party imports ---
+import json
+
+import requests
+import sv_ttk
+import tkinter as tk
+import ttkbootstrap as ttk
+from PIL import Image, ImageTk
+from ttkbootstrap.constants import SUCCESS
 
 # --- Import your existing GUI components ---
 from imageConverter import ImageConverterGUI
@@ -118,6 +112,94 @@ def apply_theme_to_titlebar(tk_window):
 APP_NAME = "WebWeaverKit"
 SETTINGS_FILENAME = "settings.json"
 
+
+def resolve_resource_path(relative_path):
+    """Resolve a resource path regardless of bundling method."""
+    if hasattr(sys, "_MEIPASS"):
+        base_path = sys._MEIPASS  # type: ignore[attr-defined]
+    elif getattr(sys, "frozen", False):
+        base_path = os.path.dirname(sys.executable)
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
+
+
+def apply_window_icon(window):
+    """Attempt to apply the application icon to a Tk window."""
+    icon_path = resolve_resource_path("convertToWebPIcon.ico")
+    png_icon_path = resolve_resource_path("convertToWebPLogo.png")
+
+    try:
+        if os.path.exists(icon_path):
+            window.iconbitmap(icon_path)
+            return
+    except tk.TclError as exc:  # pragma: no cover - platform dependent
+        print(f"Warning: Could not set ICO icon: {exc}")
+
+    if os.path.exists(png_icon_path):
+        try:
+            image = tk.PhotoImage(file=png_icon_path)
+            window.iconphoto(True, image)
+            window._iconphoto_ref = image  # Prevent garbage collection
+        except Exception as exc:  # pragma: no cover - best-effort fallback
+            print(f"Warning: Could not set PNG icon: {exc}")
+
+
+def safe_dialog_destroy(window):
+    """Release grabs before destroying transient dialogs."""
+    try:
+        window.grab_release()
+    except tk.TclError:
+        pass
+    window.destroy()
+
+
+def configure_child_window(window, parent=None, geometry=None, resizable=None, apply_icon=True):
+    """Apply common configuration to transient child windows."""
+    if geometry:
+        window.geometry(geometry)
+
+    if parent is not None:
+        window.transient(parent)
+        window.grab_set()
+
+    if resizable is not None:
+        window.resizable(*resizable)
+
+    window.update_idletasks()
+
+    if apply_icon:
+        apply_window_icon(window)
+
+    apply_theme_to_titlebar(window)
+
+    if parent is not None:
+        center_window(window, parent)
+        window.protocol("WM_DELETE_WINDOW", lambda: safe_dialog_destroy(window))
+
+
+def center_window(window, parent=None):
+    """Center a window relative to its parent (or screen if parent absent)."""
+    window.update_idletasks()
+
+    if parent is not None:
+        parent.update_idletasks()
+        main_x = parent.winfo_rootx()
+        main_y = parent.winfo_rooty()
+        main_w = parent.winfo_width()
+        main_h = parent.winfo_height()
+    else:
+        main_x = main_y = 0
+        main_w = window.winfo_screenwidth()
+        main_h = window.winfo_screenheight()
+
+    popup_w = window.winfo_width()
+    popup_h = window.winfo_height()
+    x = main_x + (main_w // 2) - (popup_w // 2)
+    y = main_y + (main_h // 2) - (popup_h // 2)
+    window.geometry(f"+{x}+{y}")
+
+
 def get_settings_dir():
     """Gets the application-specific settings directory path."""
     if sys.platform == "win32":
@@ -200,209 +282,144 @@ class HyperlinkManager:
 class MainApp(tk.Tk):
     @staticmethod
     def get_resource_path(relative_path):
-        """Gets the absolute path to a resource, works for dev and PyInstaller"""
-        if hasattr(sys, '_MEIPASS'):
-            # PyInstaller creates a temp folder and stores path in _MEIPASS
-            base_path = sys._MEIPASS
-        else:
-            # Not bundled, use the script's directory
-            if getattr(sys, 'frozen', False): # Running as a frozen executable (not PyInstaller bundle)
-                base_path = os.path.dirname(sys.executable)
-            else: # Running as a script
-                base_path = os.path.dirname(os.path.abspath(__file__))
-        return os.path.join(base_path, relative_path)
+        """Public wrapper for the module level helper."""
+        return resolve_resource_path(relative_path)
 
     def __init__(self):
         super().__init__()
-        # TRY THIS: Force Tkinter to process pending events before setting icon
-        # This can sometimes help with icon display issues.
-        self.update_idletasks()
-
-        
-        # --- Load settings early ---
         self.app_settings = load_settings()
         self.current_selected_theme = self.app_settings.get("theme", "superhero")
-        # Removed redundant style creation, sv_ttk handles it
-        # self.style = ttk.Style(self)
-        # self.style.configure("TFrame", background="#1c1c1c") # sv_ttk handles frame background
+        self.cursor_point = "hand2" if platform != "darwin" else "pointinghand"
 
-        cursor_point = "hand2" if platform != "darwin" else "pointinghand" # Use standard cursor name
+        self._initialize_window()
+        self._create_navigation()
+        self._create_frames()
+        self._initialize_menu_state()
 
+    def _initialize_window(self):
+        """Configure core window properties such as title, theme and icon."""
         self.title("Web Weaver Kit")
-
-        # --- Set Icon ---
-        try:
-            iconPath = MainApp.get_resource_path('convertToWebPIcon.ico')
-            # DEBUGGING: Print information about the icon path and existence
-            print(f"DEBUG: Attempting to load icon from: {iconPath}")
-            print(f"DEBUG: Icon file exists at resolved path: {os.path.exists(iconPath)}")
-
-            if os.path.exists(iconPath):
-                 self.iconbitmap(iconPath)
-                 print("DEBUG: self.iconbitmap() called successfully.")
-            else:
-                 print(f"Warning: Icon file not found at {iconPath}")
-        except tk.TclError as e:
-             # This error often happens on non-Windows systems or if .ico is invalid
-             print(f"Warning: Could not set icon ({iconPath}): {e}. Trying .png/.xbm as fallback.")
-             # Try PNG fallback (requires Pillow)
-             try: # Nested try for PNG
-                 pngIconPath = MainApp.get_resource_path('convertToWebPLogo.png')
-                 if os.path.exists(pngIconPath):
-                     img = tk.PhotoImage(file=pngIconPath)
-                     self.iconphoto(True, img) # Set icon for window and taskbar
-                 else:
-                     print(f"Warning: PNG icon fallback not found at {pngIconPath}")
-             except Exception as png_e:
-                 print(f"Warning: Could not set PNG icon: {png_e}")
-        except Exception as e:
-             print(f"Warning: Error accessing icon file ({iconPath}): {e}")
-
-
         self.resizable(True, True)
-
-        # --- Set Theme AND Apply to Title Bar ---
-        # Initialize with a default ttkbootstrap theme
-        # sv_ttk.set_theme("dark") # REMOVE THIS - ttkbootstrap handles it
-        # super().__init__() is called implicitly by tk.Tk, if we want themed window from start:
-        # Apply loaded or default theme
+        self.update_idletasks()
+        apply_window_icon(self)
         self.style = ttk.Style(theme=self.current_selected_theme)
-        self.update_idletasks() # Ensure window exists before getting HWND for title bar
+        self.update_idletasks()
         apply_theme_to_titlebar(self)
 
-        self.button_frame = ttk.Frame(self) # Use ttk.Frame for consistency
-        self.button_frame.pack(side="top", fill="x", padx=5, pady=5) # Add some padding
+    def _create_navigation(self):
+        """Create the main navigation button bar."""
+        self.button_frame = ttk.Frame(self)
+        self.button_frame.pack(side="top", fill="x", padx=5, pady=5)
 
-        # --- Button Definitions ---
-        # Use a dictionary to store buttons for easier state management
-        self.buttons = {}
         button_defs = [
             ("Converter", self.show_image_converter, "image_converter"),
             ("File Renamer", self.show_file_renamer, "file_renamer"),
             ("PDF to Image", self.show_pdf_to_image, "pdf_to_image"),
             ("Video Converter", self.show_video_converter, "video_converter"),
             ("Text Formatter", self.show_text_converter, "text_formatter"),
-            ("Image Mapping Tool", self.show_svg_generator, "svg_generator") # Added SVG Generator Button
+            ("Image Mapping Tool", self.show_svg_generator, "svg_generator"),
         ]
 
+        self.buttons = {}
         for text, command, name in button_defs:
-            button = ttk.Button(self.button_frame, text=text, command=command, cursor=cursor_point)
-            button.pack(side="left", padx=5, pady=5) # Removed ipady/ipadx, rely on theme
+            button = ttk.Button(
+                self.button_frame,
+                text=text,
+                command=command,
+                cursor=self.cursor_point,
+            )
+            button.pack(side="left", padx=5, pady=5)
             self.buttons[name] = button
 
-        # Hamburger menu button
-        self.menu_button = ttk.Button(self.button_frame, text="≡", command=self.show_menu, width=3) # Slightly wider
+        self.menu_button = ttk.Button(
+            self.button_frame,
+            text="≡",
+            command=self.show_menu,
+            width=3,
+            cursor=self.cursor_point,
+        )
         self.menu_button.pack(side="right", padx=5, pady=5)
-        self.menu_button.config(cursor=cursor_point)
 
-        # --- Frame Definitions ---
-        # Use a dictionary to store frames for easier management
-        self.frames = {}
-        self.frames["image_converter"] = ImageConverterGUI(self)
-        self.frames["file_renamer"] = FileRenamerGUI(self)
-        self.frames["pdf_to_image"] = pdfToImageGUI(self)
-        self.frames["video_converter"] = VideoConverterGUI(self)
-        self.frames["text_formatter"] = TextFormatterGUI(self)
-        self.frames["svg_generator"] = SVGCircleGeneratorGUI(self) # Added SVG Generator Frame instance
+    def _create_frames(self):
+        """Instantiate and display the content frames."""
+        self.frames = {
+            "image_converter": ImageConverterGUI(self),
+            "file_renamer": FileRenamerGUI(self),
+            "pdf_to_image": pdfToImageGUI(self),
+            "video_converter": VideoConverterGUI(self),
+            "text_formatter": TextFormatterGUI(self),
+            "svg_generator": SVGCircleGeneratorGUI(self),
+        }
 
-        # Pack the initial frame (image_converter)
         self.current_frame_name = "image_converter"
-        self.frames[self.current_frame_name].pack(fill="both", expand=True, padx=10, pady=10) # Add padding to frame content
-        self.buttons[self.current_frame_name].config(state='disabled', cursor="arrow")
-
-        # Hide other frames initially
         for name, frame in self.frames.items():
-            if name != self.current_frame_name:
+            if name == self.current_frame_name:
+                frame.pack(fill="both", expand=True, padx=10, pady=10)
+            else:
                 frame.pack_forget()
 
-        # --- Update checks and Menu ---
-        self.update_available = False # Initialize
+        self._update_button_states()
+
+    def _initialize_menu_state(self):
+        """Prepare update checking state and dropdown menu."""
+        self.update_available = False
         self.download_url = ""
-        self.check_for_updates_at_start() # Run initial check
-
-        # Dropdown menu (create after update check)
+        self.check_for_updates_at_start()
         self.dropdown_menu = tk.Menu(self, tearoff=0)
-        self.update_dropdown_menu() # Populate menu
-
-        self.update_menu_button_text() # Update button based on check
-
-        # Schedule periodic checks (e.g., every 12 hours)
+        self.update_dropdown_menu()
+        self.update_menu_button_text()
         self.after(12 * 60 * 60 * 1000, self.periodic_check_for_updates)
 
-        # Set initial size (optional, can let it auto-size)
-        # self.geometry('800x600') # Example initial size
+    def _update_button_states(self):
+        """Disable the active navigation button and reset others."""
+        for name, button in self.buttons.items():
+            if name == self.current_frame_name:
+                button.config(state="disabled", cursor="arrow")
+            else:
+                button.config(state="normal", cursor=self.cursor_point)
 
+    def _fade_window(self, start, end, steps=10):
+        """Animate window opacity between start and end values."""
+        try:
+            if self.attributes("-alpha") is None:
+                return False
+        except tk.TclError:
+            return False
+
+        delta = (end - start) / max(steps, 1)
+        for index in range(steps + 1):
+            self.attributes("-alpha", start + delta * index)
+            self.update()
+            time.sleep(0.015)
+        return True
 
     def _switch_frame(self, target_frame_name):
         """Helper function to switch frames with fade effect."""
         if target_frame_name == self.current_frame_name:
             return # Already showing this frame
 
-        cursor_point = "hand2" if platform != "darwin" else "pointinghand"
-        do_fade = True # Control fade effect
+        fade_supported = self._fade_window(1.0, 0.0)
 
-        # --- Fade Out ---
-        if do_fade:
-            try:
-                # Check if alpha is supported before trying to use it
-                if self.attributes('-alpha') is not None:
-                    for i in range(10, -1, -1):
-                        self.attributes('-alpha', i/10)
-                        self.update()
-                        time.sleep(0.015) # Faster fade
-                else:
-                    do_fade = False # Disable fade if not supported from the start
-            except tk.TclError: # Handle cases where alpha might not be supported mid-fade
-                print("Alpha transparency not supported on this system/window manager.")
-                do_fade = False # Disable fade if not supported
-                self.attributes('-alpha', 1.0) # Ensure fully opaque if fade fails
-
-
-        # --- Hide Current Frame ---
         if self.current_frame_name and self.current_frame_name in self.frames:
             self.frames[self.current_frame_name].pack_forget()
 
-        # --- Show Target Frame ---
         self.current_frame_name = target_frame_name
-        if self.current_frame_name in self.frames:
-             # Add padding when packing the frame content
-             self.frames[self.current_frame_name].pack(fill="both", expand=True, padx=10, pady=10)
-        else:
-             print(f"Error: Frame '{self.current_frame_name}' not found.")
-             # Optionally show a default frame or error message
-             self.current_frame_name = "image_converter" # Fallback
-             self.frames[self.current_frame_name].pack(fill="both", expand=True, padx=10, pady=10)
+        frame = self.frames.get(self.current_frame_name)
+        if frame is None:
+            print(f"Error: Frame '{self.current_frame_name}' not found.")
+            self.current_frame_name = "image_converter"
+            frame = self.frames[self.current_frame_name]
 
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self._update_button_states()
 
-        # --- Update Button States ---
-        for name, button in self.buttons.items():
-            if name == self.current_frame_name:
-                button.config(state='disabled', cursor="arrow")
-            else:
-                button.config(state='normal', cursor=cursor_point)
-
-        # --- Fade In ---
-        if do_fade:
+        if not fade_supported:
             try:
-                # Check again if alpha is supported
-                if self.attributes('-alpha') is not None:
-                    for i in range(0, 11):
-                        self.attributes('-alpha', i/10)
-                        self.update()
-                        time.sleep(0.015) # Faster fade
-                    self.attributes('-alpha', 1.0) # Ensure fully opaque
-                else:
-                    self.attributes('-alpha', 1.0) # Ensure visible if fade disabled at start
+                self.attributes("-alpha", 1.0)
             except tk.TclError:
-                # Handle error during fade-in (less likely but possible)
-                print("Alpha transparency not supported on this system/window manager.")
-                self.attributes('-alpha', 1.0) # Ensure fully opaque
+                pass
         else:
-             # Ensure window is fully opaque if fade was disabled or failed
-             try:
-                 self.attributes('-alpha', 1.0)
-             except tk.TclError:
-                 pass # Ignore if alpha wasn't supported anyway
+            self._fade_window(0.0, 1.0)
 
 
     # --- Show Frame Methods ---
@@ -419,7 +436,7 @@ class MainApp(tk.Tk):
         self._switch_frame("video_converter")
 
     def show_text_converter(self):
-         self._switch_frame("text_formatter") # Corrected frame name
+        self._switch_frame("text_formatter") # Corrected frame name
 
     def show_svg_generator(self): # Added method for SVG Generator
         self._switch_frame("svg_generator")
@@ -468,13 +485,7 @@ class MainApp(tk.Tk):
         """Opens a Toplevel window to select a ttkbootstrap theme."""
         dialog = ttk.Toplevel(self)
         dialog.title("Select Theme")
-        dialog.geometry("700x480") # Increased size for preview
-        dialog.transient(self)
-        dialog.grab_set()
-
-        # Apply title bar theme to the dialog itself
-        dialog.update_idletasks()
-        apply_theme_to_titlebar(dialog)
+        configure_child_window(dialog, parent=self, geometry="700x480", resizable=(True, True))
 
         # Main container frame in the dialog
         main_dialog_frame = ttk.Frame(dialog, padding=10)
@@ -514,12 +525,12 @@ class MainApp(tk.Tk):
                 # print(f"DEBUG: Available themes (fallback attempt with new Style()): {available_themes}")
                 if not available_themes:
                     messagebox.showerror("Theme Error", "No ttkbootstrap themes could be loaded. Please check your ttkbootstrap installation.", parent=dialog)
-                    dialog.destroy()
+                    safe_dialog_destroy(dialog)
                     return
             except Exception as e_fallback:
                 print(f"DEBUG: Fallback theme loading also failed: {e_fallback}")
                 messagebox.showerror("Theme Error", f"Failed to load themes: {e_fallback}. Check ttkbootstrap installation.", parent=dialog)
-                dialog.destroy()
+                safe_dialog_destroy(dialog)
                 return
 
         # --- Theme Preview Label ---
@@ -592,11 +603,11 @@ class MainApp(tk.Tk):
 
         theme_combo.bind("<<ComboboxSelected>>", on_theme_selected_in_combo)
         
-        def safe_dialog_destroy():
+        def close_dialog():
             nonlocal dialog_active
             dialog_active = False # Signal that dialog operations should cease
             if dialog and dialog.winfo_exists():
-                dialog.destroy()
+                safe_dialog_destroy(dialog)
 
         def apply_theme_action():
             nonlocal dialog_active
@@ -626,7 +637,7 @@ class MainApp(tk.Tk):
                 print(f"Theme Error: Could not apply theme '{chosen_theme}'.\n{e}")
             
             # Schedule the dialog destruction to happen after current event processing
-            self.after_idle(safe_dialog_destroy)
+            self.after_idle(close_dialog)
 
         apply_button = ttk.Button(controls_frame, text="Apply", command=apply_theme_action, bootstyle=SUCCESS)
         apply_button.pack(pady=(20,0), anchor=tk.W)
@@ -635,10 +646,11 @@ class MainApp(tk.Tk):
         if dialog.winfo_exists(): # Check before calling update_idletasks and loading preview
             dialog.update_idletasks() # Ensure preview_frame has dimensions
             on_theme_selected_in_combo() # Load preview for the initially selected theme
-        
-        # Override the dialog's close button (X) to also use safe_dialog_destroy
+            center_window(dialog, self)
+
+        # Override the dialog's close button (X) to use the local close handler
         if dialog.winfo_exists():
-            dialog.protocol("WM_DELETE_WINDOW", safe_dialog_destroy)
+            dialog.protocol("WM_DELETE_WINDOW", close_dialog)
 
     def periodic_check_for_updates(self):
         print("Performing periodic update check...")
@@ -691,30 +703,7 @@ class MainApp(tk.Tk):
         # --- About Window ---
         about_win = tk.Toplevel(self)
         about_win.title("About")
-        about_win.transient(self) # Make it transient to the main window
-        about_win.grab_set()      # Grab focus
-        about_win.resizable(False, False)
-        
-        # Ensure an explicit size is set, e.g.:
-        about_win.geometry("350x300") 
-
-        # --- Apply Title Bar Theme to Toplevel ---
-        about_win.update_idletasks() 
-        apply_theme_to_titlebar(about_win)
-
-        # Use the same resource_path function as in __init__
-        # --- Set Icon for About Window ---
-        try:
-            iconPath = MainApp.get_resource_path('convertToWebPIcon.ico')
-            if os.path.exists(iconPath):
-                 about_win.iconbitmap(iconPath)
-            else: # Try PNG fallback
-                 pngIconPath = MainApp.get_resource_path('convertToWebPLogo.png')
-                 if os.path.exists(pngIconPath):
-                     img = tk.PhotoImage(file=pngIconPath)
-                     about_win.iconphoto(True, img)
-        except Exception as e:
-             print(f"Warning: Could not set About window icon: {e}")
+        configure_child_window(about_win, parent=self, geometry="350x300", resizable=(False, False))
 
         # --- Load and display the image ---
         try:
@@ -749,32 +738,14 @@ class MainApp(tk.Tk):
 
 
         # Center the window relative to the main window
-        about_win.update_idletasks() # Ensure dimensions are calculated
-        main_x = self.winfo_rootx()
-        main_y = self.winfo_rooty()
-        main_w = self.winfo_width()
-        main_h = self.winfo_height()
-        popup_w = about_win.winfo_width()
-        popup_h = about_win.winfo_height()
-        x = main_x + (main_w // 2) - (popup_w // 2)
-        y = main_y + (main_h // 2) - (popup_h // 2)
-        about_win.geometry(f"+{x}+{y}")
-
-        # Ensure focus returns to main window on close
-        about_win.protocol("WM_DELETE_WINDOW", lambda: (about_win.grab_release(), about_win.destroy()))
+        center_window(about_win, self)
 
 
     def show_licenses(self):
         # --- License Window ---
         license_window = tk.Toplevel(self)
         license_window.title("Licenses")
-        license_window.geometry('700x500') # Adjusted size
-        license_window.transient(self)
-        license_window.grab_set()
-
-        # --- Apply Title Bar Theme to Toplevel ---
-        license_window.update_idletasks() # Ensure window exists for HWND
-        apply_theme_to_titlebar(license_window) # <<--- APPLY THEME TO TOPLEVEL
+        configure_child_window(license_window, parent=self, geometry='700x500', resizable=(True, True))
 
         # --- Main frame for content ---
         main_license_frame = ttk.Frame(license_window)
@@ -893,16 +864,7 @@ SOFTWARE."""
         update_license_display("FFmpeg")
 
         # --- Center the window ---
-        license_window.update_idletasks()
-        main_x = self.winfo_rootx(); main_y = self.winfo_rooty()
-        main_w = self.winfo_width(); main_h = self.winfo_height()
-        popup_w = license_window.winfo_width(); popup_h = license_window.winfo_height()
-        x = main_x + (main_w // 2) - (popup_w // 2)
-        y = main_y + (main_h // 2) - (popup_h // 2)
-        license_window.geometry(f"+{x}+{y}")
-
-        # --- Ensure focus returns on close ---
-        license_window.protocol("WM_DELETE_WINDOW", lambda: (license_window.grab_release(), license_window.destroy()))
+        center_window(license_window, self)
 
 
 # === Helper Functions (Outside Class - No changes here related to title bar) ===
