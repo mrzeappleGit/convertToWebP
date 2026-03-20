@@ -761,12 +761,33 @@ def _cleanup_file(path):
         pass
 
 
+def _get_app_exe_path():
+    """Return the path to the actual application exe.
+    When frozen (PyInstaller), this is sys.executable.
+    When running from source, we can't self-update an exe, so return None.
+    """
+    if getattr(sys, 'frozen', False):
+        return sys.executable
+    return None
+
+
 def _apply_update(update_exe_path):
     """Replace the running exe via a helper batch script and restart."""
-    current_dir = _get_current_dir()
+    target = _get_app_exe_path()
+    if not target:
+        # Running from source — just inform the user
+        try:
+            from tkinter import messagebox
+            messagebox.showinfo("Update Downloaded",
+                                f"Update saved to:\n{update_exe_path}\n\n"
+                                "Running from source — please replace the exe manually.")
+        except Exception:
+            pass
+        return False
+
+    current_dir = os.path.dirname(target)
+    exe_name = os.path.basename(target)
     helper_bat = os.path.join(current_dir, 'update_helper.bat')
-    exe_name = os.path.basename(sys.executable)
-    target = os.path.join(current_dir, exe_name)
     log_path = os.path.join(current_dir, 'update_log.txt')
 
     if not os.path.exists(update_exe_path):
@@ -776,17 +797,31 @@ def _apply_update(update_exe_path):
         with open(helper_bat, 'w') as f:
             f.write("@echo off\n")
             f.write(f'echo [%DATE% %TIME%] Starting update > "{log_path}"\n')
-            f.write("timeout /t 2 /nobreak > NUL\n")
+            # Wait for the app to fully exit and release file locks
+            f.write("timeout /t 3 /nobreak > NUL\n")
             f.write(f'taskkill /IM "{exe_name}" /F > NUL 2>&1\n')
+            # Retry loop — wait for the exe to be unlocked (up to 15 seconds)
+            f.write("set retries=0\n")
+            f.write(":retry\n")
+            f.write(f'move /Y "{update_exe_path}" "{target}" > NUL 2>&1\n')
+            f.write("if %errorlevel% EQU 0 goto success\n")
+            f.write("set /a retries+=1\n")
+            f.write("if %retries% GEQ 10 goto fail\n")
+            f.write(f'echo [%DATE% %TIME%] Retry %retries%... >> "{log_path}"\n')
+            f.write("timeout /t 2 /nobreak > NUL\n")
+            f.write("goto retry\n")
+            # Success path
+            f.write(":success\n")
+            f.write(f'echo [%DATE% %TIME%] Update applied successfully >> "{log_path}"\n')
             f.write("timeout /t 1 /nobreak > NUL\n")
-            f.write(f'move /Y "{update_exe_path}" "{target}"\n')
-            f.write(f'if %errorlevel% NEQ 0 (\n')
-            f.write(f'  echo [%DATE% %TIME%] Move failed >> "{log_path}"\n')
-            f.write(f'  del "{update_exe_path}" > NUL 2>&1\n')
-            f.write("  goto end\n)\n")
-            f.write(f'echo [%DATE% %TIME%] Update applied >> "{log_path}"\n')
             f.write(f'start "" "{target}"\n')
-            f.write(":end\n")
+            f.write("goto cleanup\n")
+            # Fail path
+            f.write(":fail\n")
+            f.write(f'echo [%DATE% %TIME%] Failed to replace exe after %retries% retries >> "{log_path}"\n')
+            f.write(f'del "{update_exe_path}" > NUL 2>&1\n')
+            # Cleanup — self-delete the batch file
+            f.write(":cleanup\n")
             f.write('(goto) 2>nul & del "%~f0"\n')
 
         flags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
