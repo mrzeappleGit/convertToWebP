@@ -403,13 +403,68 @@ class MainApp(tk.Tk):
         self.dropdown_menu.add_command(label="Licenses", command=self.show_licenses)
 
     def _change_color_scheme(self, scheme_name):
-        """Save the chosen color scheme and restart the app via subprocess."""
+        """Save the chosen color scheme and apply it by rebuilding the UI."""
         self.app_settings["color_scheme"] = scheme_name
         save_settings(self.app_settings)
-        # Launch a fresh process and exit this one cleanly
-        import sys
-        subprocess.Popen([sys.executable] + sys.argv)
-        self.quit()
+
+        # Update the theme module globals
+        set_color_scheme(scheme_name)
+
+        # Re-apply the ttk styles with the new colors
+        import theme as _t
+        self.style = apply_atelier_theme(self)
+
+        # Rebuild the tab bar with new colors
+        self.tab_bar_frame.destroy()
+        self.tab_bar_frame = tk.Frame(self, bg=_t.SURFACE_CONTAINER_LOW)
+        self.tab_bar_frame.pack(side="top", fill="x", before=self.content_frame)
+
+        tab_inner = tk.Frame(self.tab_bar_frame, bg=_t.SURFACE_CONTAINER_LOW)
+        tab_inner.pack(side="left", fill="x", expand=True, padx=SP_2, pady=(SP_2, 0))
+
+        button_defs = [
+            ("Converter",          "\u2B9F",  self.show_image_converter, "image_converter"),
+            ("File Renamer",       "\u270F",  self.show_file_renamer,    "file_renamer"),
+            ("PDF to Image",       "\u2B07",  self.show_pdf_to_image,    "pdf_to_image"),
+            ("Video Converter",    "\u25B6",  self.show_video_converter, "video_converter"),
+            ("Text Formatter",     "Aa",      self.show_text_converter,  "text_formatter"),
+            ("Image Mapping",      "\u25CE",  self.show_svg_generator,   "svg_generator"),
+        ]
+
+        self.tab_buttons = {}
+        for text, icon, command, name in button_defs:
+            tab = TabButton(tab_inner, text=text, icon=icon, command=command)
+            tab.pack(side="left", padx=1)
+            self.tab_buttons[name] = tab
+
+        self.menu_button = ttk.Button(
+            self.tab_bar_frame, text="\u2261", command=self.show_menu,
+            width=4, style="Menu.TButton",
+        )
+        self.menu_button.pack(side="right", padx=SP_4, pady=SP_2)
+        self.update_menu_button_text()
+
+        # Rebuild the dropdown menu with new colors
+        self.dropdown_menu = tk.Menu(
+            self, tearoff=0,
+            bg=_t.SURFACE_CONTAINER_HIGHEST, fg=_t.ON_SURFACE,
+            activebackground=_t.SURFACE_CONTAINER_HIGH, activeforeground=_t.ON_SURFACE,
+            borderwidth=0, relief="flat", font=BODY,
+        )
+        self.update_dropdown_menu()
+
+        # Destroy and recreate all tool frames with new colors
+        old_frame_name = self.current_frame_name
+        for name, frame in self.frames.items():
+            frame.destroy()
+        self.frames.clear()
+
+        self.content_frame.configure(bg=_t.SURFACE_CONTAINER)
+        self._get_or_create_frame(old_frame_name).pack(
+            in_=self.content_frame, fill="both", expand=True, padx=SP_8, pady=SP_8,
+        )
+        self.tab_buttons[old_frame_name].set_active(True)
+        self.configure(bg=_t.SURFACE)
 
     # ── About dialog ──────────────────────────────────────────────
 
