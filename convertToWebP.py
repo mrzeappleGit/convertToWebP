@@ -56,7 +56,7 @@ from svgCircleGenerator import SVGCircleGeneratorGUI
 
 GITHUB_REPO = "mrzeappleGit/convertToWebP"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-currentVersion = "1.10.0"
+currentVersion = "1.11.0"
 
 headers = {
     'User-Agent': f'WebWeaverKit/{currentVersion}',
