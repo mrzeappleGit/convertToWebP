@@ -83,8 +83,10 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    [], # a.binaries are typically handled here if not in Analysis
-    exclude_binaries=True,
+    a.binaries,
+    a.datas,
+    a.zipfiles,
+    exclude_binaries=False,
     name=app_name,
     debug=False,
     bootloader_ignore_signals=False,

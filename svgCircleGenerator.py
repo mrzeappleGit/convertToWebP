@@ -1,669 +1,773 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext, StringVar
+from tkinter import ttk, filedialog, messagebox, scrolledtext, StringVar, colorchooser
 from PIL import Image, ImageTk
 import os
 import math
 from sys import platform
 
+from theme import (
+    SURFACE, SURFACE_CONTAINER, SURFACE_CONTAINER_LOW, SURFACE_CONTAINER_HIGH,
+    SURFACE_CONTAINER_HIGHEST, SURFACE_CONTAINER_LOWEST,
+    PRIMARY, PRIMARY_CONTAINER, SECONDARY, SECONDARY_CONTAINER,
+    ON_PRIMARY, ON_SURFACE, ON_SURFACE_VARIANT, OUTLINE_VARIANT,
+    TERTIARY, ERROR,
+    FONT_FAMILY, DISPLAY_SM, TITLE_LG, TITLE_MD, TITLE_SM, BODY, BODY_SM, LABEL_SM, LABEL_SM_MONO,
+    SP_1, SP_2, SP_4, SP_6, SP_8, SP_10,
+    apply_atelier_theme, Tooltip, create_section, PillSelector,
+)
+
+
 class SVGCircleGeneratorGUI(ttk.Frame):
-    """
-    A Tkinter Frame for loading an image, allowing the user to draw
-    either a circle (by clicking center and defining radius) or a polygon
-    (by clicking vertices), and generating the corresponding SVG path data.
-    """
+    """Draw circles, polygons, or rectangles on an image and generate SVG path data."""
+
     def __init__(self, master=None, **kwargs):
-        """
-        Initializes the Frame and its widgets.
-        """
         super().__init__(master, **kwargs)
-        self.master = master # Store master window reference
+        self.master = master
 
-        # --- Constants ---
-        self.POLYGON_CLOSING_THRESHOLD = 15 # Max distance in canvas pixels to close polygon
-
-        # --- State Variables ---
+        self.POLYGON_CLOSING_THRESHOLD = 15
         self.image_path = None
         self.tk_image = None
         self.original_image = None
         self.display_image = None
         self.canvas_image_id = None
-        self.image_display_rect = None # Stores (x, y, width, height) of the image on the canvas
-        self.shape_drawn = False       # Flag to indicate if any shape element exists
-
-        # Drawing Mode
-        self.current_mode = StringVar(value="circle") # Modes: "circle", "polygon"
-
-        # Circle Specific State
-        self.center_original_coords = None   # Stores (original_x, original_y) of the center
-        self.center_canvas_coords = None     # Stores (canvas_x, canvas_y) for drawing
-        self.radius_var = StringVar(value="20") # Default radius value
-
-        # Polygon Specific State
-        self.polygon_original_points = [] # List of (original_x, original_y) tuples for SVG
-        self.polygon_canvas_points = []   # List of (canvas_x, canvas_y) tuples for drawing
+        self.image_display_rect = None
+        self.shape_drawn = False
+        self.current_mode = StringVar(value="circle")
+        self.center_original_coords = None
+        self.center_canvas_coords = None
+        self.radius_var = StringVar(value="20")
+        self.polygon_original_points = []
+        self.polygon_canvas_points = []
         self.is_polygon_closed = False
-
-        # Shared State / Output
         self.generated_svg_path = ""
-        self.drawn_canvas_items = [] # Keep track of drawn feedback shapes (markers, lines)
+        self.drawn_canvas_items = []
 
-        # Determine cursor type based on platform
-        self.cursor_point = "hand2" if platform != "darwin" else "pointinghand"
-        self.cursor_crosshair = "crosshair"
+        # Rectangle state
+        self.rect_first_original = None
+        self.rect_first_canvas = None
+        self.rect_second_original = None
+        self.rect_second_canvas = None
 
-        # --- Widgets ---
-        # Frame for top controls
-        self.control_frame = ttk.Frame(self)
-        self.control_frame.pack(pady=10, padx=10, fill=tk.X)
+        # Stroke width
+        self.stroke_width_var = tk.DoubleVar(value=2.0)
 
-        # Load Image Button
-        self.load_button = ttk.Button(self.control_frame, text="Load Image", command=self.load_image, cursor=self.cursor_point)
-        self.load_button.grid(row=0, column=0, padx=5)
+        # Color
+        self.color_var = StringVar(value=SECONDARY)
 
-        # Mode Selector Frame
-        self.mode_frame = ttk.LabelFrame(self.control_frame, text="Shape Type")
-        self.mode_frame.grid(row=0, column=1, padx=10)
-        self.circle_radio = ttk.Radiobutton(self.mode_frame, text="Circle", variable=self.current_mode, value="circle", command=self._update_mode, cursor=self.cursor_point)
-        self.circle_radio.pack(side=tk.LEFT, padx=5)
-        self.polygon_radio = ttk.Radiobutton(self.mode_frame, text="Polygon", variable=self.current_mode, value="polygon", command=self._update_mode, cursor=self.cursor_point)
-        self.polygon_radio.pack(side=tk.LEFT, padx=5)
+        # Zoom
+        self.zoom_level = 1.0
+        self.zoom_min = 0.5
+        self.zoom_max = 3.0
 
-        # Clear Shape Button
-        self.clear_button = ttk.Button(self.control_frame, text="Clear Shape", command=self.clear_shapes, cursor=self.cursor_point)
-        self.clear_button.grid(row=0, column=2, padx=5)
-        self.clear_button.config(state=tk.DISABLED)
+        # All generated SVG elements (for export)
+        self.all_svg_elements = []
 
-        # Radius Input (conditionally shown)
-        self.radius_frame = ttk.Frame(self.control_frame)
-        self.radius_frame.grid(row=0, column=3, padx=(10, 5)) # Initially place it
-        self.radius_label = ttk.Label(self.radius_frame, text="Radius:")
-        self.radius_label.pack(side=tk.LEFT)
-        # Validate command to allow only numbers and one decimal point
+        # ── Main split layout ──────────────────────────────────────
+        main_pane = tk.Frame(self, bg=SURFACE_CONTAINER)
+        main_pane.pack(fill=tk.BOTH, expand=True)
+
+        # Left side: canvas area (~60%)
+        left_frame = tk.Frame(main_pane, bg=SURFACE_CONTAINER)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Load image button row at top of canvas area
+        top_bar = tk.Frame(left_frame, bg=SURFACE_CONTAINER)
+        top_bar.pack(fill=tk.X, padx=SP_4, pady=(SP_4, SP_2))
+        ttk.Button(top_bar, text="Load Image\u2026", command=self.load_image, style="Tertiary.TButton").pack(side=tk.LEFT)
+
+        # Canvas container with relative positioning for zoom overlay
+        canvas_container = tk.Frame(left_frame, bg=SURFACE_CONTAINER_LOWEST)
+        canvas_container.pack(fill=tk.BOTH, expand=True, padx=SP_4, pady=(0, SP_2))
+
+        self.canvas = tk.Canvas(canvas_container, width=600, height=400, highlightthickness=0, bg=SURFACE_CONTAINER_LOWEST)
+        self.canvas.pack(expand=True, fill=tk.BOTH)
+        self.canvas.bind("<Button-1>", self.on_canvas_click)
+        self.canvas.bind("<Configure>", self._on_canvas_resize)
+
+        # Floating zoom controls (placed after canvas so we can overlay)
+        self._zoom_frame = tk.Frame(canvas_container, bg=SURFACE_CONTAINER_HIGH)
+        self._zoom_frame.place(relx=0.0, rely=1.0, anchor="sw", x=SP_4, y=-SP_4)
+
+        zoom_out_btn = tk.Label(
+            self._zoom_frame, text="\u2212", font=TITLE_MD, cursor="hand2",
+            bg=SURFACE_CONTAINER_HIGH, fg=ON_SURFACE, padx=SP_2, pady=SP_1,
+        )
+        zoom_out_btn.pack(side=tk.LEFT)
+        zoom_out_btn.bind("<Button-1>", lambda e: self._zoom(-0.25))
+
+        self._zoom_label = tk.Label(
+            self._zoom_frame, text="100%", font=LABEL_SM_MONO,
+            bg=SURFACE_CONTAINER_HIGH, fg=ON_SURFACE_VARIANT, padx=SP_2, pady=SP_1,
+        )
+        self._zoom_label.pack(side=tk.LEFT)
+
+        zoom_in_btn = tk.Label(
+            self._zoom_frame, text="+", font=TITLE_MD, cursor="hand2",
+            bg=SURFACE_CONTAINER_HIGH, fg=ON_SURFACE, padx=SP_2, pady=SP_1,
+        )
+        zoom_in_btn.pack(side=tk.LEFT)
+        zoom_in_btn.bind("<Button-1>", lambda e: self._zoom(0.25))
+
+        # Instruction label below canvas
+        self.instruction_label = tk.Label(
+            left_frame, text="Load an image to begin.", font=BODY,
+            fg=ON_SURFACE_VARIANT, bg=SURFACE_CONTAINER, anchor="w",
+        )
+        self.instruction_label.pack(fill="x", padx=SP_4, pady=(0, SP_4))
+
+        # ── Right side: controls panel (~40%) ──────────────────────
+        right_frame = tk.Frame(main_pane, bg=SURFACE_CONTAINER, width=320)
+        right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, SP_4), pady=SP_4)
+        right_frame.pack_propagate(False)
+
+        # ── Section: SHAPE ─────────────────────────────────────────
+        shape_wrap, shape_body = create_section(right_frame, "SHAPE")
+        shape_wrap.pack(fill=tk.X, pady=(0, SP_4))
+
+        self._pill_selector = PillSelector(
+            shape_body,
+            options=[("circle", "Circle"), ("polygon", "Polygon"), ("rectangle", "Rectangle")],
+            default="circle",
+            command=self._on_pill_mode_change,
+            bg=SURFACE_CONTAINER_LOW,
+        )
+        self._pill_selector.pack(fill=tk.X)
+
+        # ── Section: PROPERTIES ────────────────────────────────────
+        props_wrap, props_body = create_section(right_frame, "PROPERTIES")
+        props_wrap.pack(fill=tk.X, pady=(0, SP_4))
+
+        # Radius entry (circle mode only)
+        self.radius_frame = tk.Frame(props_body, bg=SURFACE_CONTAINER_LOW)
+        self.radius_frame.pack(fill=tk.X, pady=(0, SP_2))
+        tk.Label(self.radius_frame, text="Radius", font=LABEL_SM, fg=ON_SURFACE_VARIANT, bg=SURFACE_CONTAINER_LOW).pack(side=tk.LEFT)
         vcmd = (self.register(self._validate_radius), '%P')
-        self.radius_entry = ttk.Entry(self.radius_frame, textvariable=self.radius_var, width=5, validate='key', validatecommand=vcmd)
-        self.radius_entry.pack(side=tk.LEFT, padx=(2,0))
+        self.radius_entry = ttk.Entry(self.radius_frame, textvariable=self.radius_var, width=8, validate='key', validatecommand=vcmd)
+        self.radius_entry.pack(side=tk.RIGHT)
         self.radius_entry.bind("<FocusOut>", self._on_radius_change)
         self.radius_entry.bind("<Return>", self._on_radius_change)
 
-        # Canvas for Image Display
-        # Set initial size, will be adjusted by image loading
-        self.canvas = tk.Canvas(self, width=600, height=400, highlightthickness=0) # Removed bg
-        self.canvas.pack(pady=10, padx=10, expand=True, fill=tk.BOTH)
-        self.canvas.bind("<Button-1>", self.on_canvas_click) # Bind left mouse click
-        self.canvas.bind("<Configure>", self._on_canvas_resize) # Handle window resize
+        # Stroke width slider
+        stroke_frame = tk.Frame(props_body, bg=SURFACE_CONTAINER_LOW)
+        stroke_frame.pack(fill=tk.X, pady=(0, SP_2))
+        tk.Label(stroke_frame, text="Stroke Width", font=LABEL_SM, fg=ON_SURFACE_VARIANT, bg=SURFACE_CONTAINER_LOW).pack(side=tk.LEFT)
+        self._stroke_value_label = tk.Label(stroke_frame, text="2.0", font=LABEL_SM_MONO, fg=ON_SURFACE, bg=SURFACE_CONTAINER_LOW)
+        self._stroke_value_label.pack(side=tk.RIGHT)
 
-        # Label for instructions
-        self.instruction_label = ttk.Label(self, text="Load an image to begin.")
-        self.instruction_label.pack(pady=(0,5), padx=10, anchor=tk.W) # Adjusted padding
+        stroke_slider_frame = tk.Frame(props_body, bg=SURFACE_CONTAINER_LOW)
+        stroke_slider_frame.pack(fill=tk.X, pady=(0, SP_4))
+        self._stroke_scale = ttk.Scale(
+            stroke_slider_frame, from_=0.5, to=10.0,
+            variable=self.stroke_width_var, orient=tk.HORIZONTAL,
+            command=self._on_stroke_change,
+        )
+        self._stroke_scale.pack(fill=tk.X)
 
-        # Text Area for SVG Output
-        self.output_label = ttk.Label(self, text="Generated SVG Path Data:")
-        self.output_label.pack(padx=10, anchor=tk.W)
-        self.output_text = scrolledtext.ScrolledText(self, height=4, wrap=tk.WORD, bg="#5A6268", fg="#333333", relief=tk.SOLID, borderwidth=1)
-        self.output_text.pack(pady=(0,10), padx=10, fill=tk.X)
-        self.output_text.config(state=tk.DISABLED) # Read-only
-        
-        # --- Manage scrollbar visibility for output_text ---
-        # Bind to <Configure> event of the Text component of ScrolledText
-        # to re-evaluate scrollbar visibility if its size changes (e.g., due to window resize and fill=X)
+        # Color picker
+        color_frame = tk.Frame(props_body, bg=SURFACE_CONTAINER_LOW)
+        color_frame.pack(fill=tk.X, pady=(0, SP_2))
+        tk.Label(color_frame, text="Color", font=LABEL_SM, fg=ON_SURFACE_VARIANT, bg=SURFACE_CONTAINER_LOW).pack(side=tk.LEFT)
+
+        color_input_frame = tk.Frame(color_frame, bg=SURFACE_CONTAINER_LOW)
+        color_input_frame.pack(side=tk.RIGHT)
+
+        self._color_swatch = tk.Canvas(
+            color_input_frame, width=20, height=20,
+            highlightthickness=0, bg=SURFACE_CONTAINER_LOW, cursor="hand2",
+        )
+        self._color_swatch.pack(side=tk.LEFT, padx=(0, SP_1))
+        self._swatch_rect = self._color_swatch.create_rectangle(0, 0, 20, 20, fill=self.color_var.get(), outline="")
+        self._color_swatch.bind("<Button-1>", self._pick_color)
+
+        self._color_entry = ttk.Entry(color_input_frame, textvariable=self.color_var, width=9)
+        self._color_entry.pack(side=tk.LEFT)
+        self._color_entry.bind("<Return>", self._on_color_entry_change)
+        self._color_entry.bind("<FocusOut>", self._on_color_entry_change)
+
+        # ── Section: SVG OUTPUT ────────────────────────────────────
+        svg_wrap, svg_body = create_section(right_frame, "SVG OUTPUT")
+        svg_wrap.pack(fill=tk.BOTH, expand=True, pady=(0, SP_4))
+
+        self.output_text = scrolledtext.ScrolledText(
+            svg_body, height=6, wrap=tk.WORD, relief=tk.FLAT, borderwidth=0,
+            bg=SURFACE_CONTAINER_LOWEST, fg=ON_SURFACE, font=LABEL_SM_MONO,
+            insertbackground=ON_SURFACE, selectbackground=SECONDARY,
+        )
+        self.output_text.pack(fill=tk.BOTH, expand=True)
+        self.output_text.config(state=tk.DISABLED)
         self.output_text.bind("<Configure>", self._manage_scrollbar_visibility)
-        # Initial check will be triggered by _update_mode -> clear_shapes -> _update_output_text
 
-        # Initial UI setup based on mode
+        # ── Button row ─────────────────────────────────────────────
+        btn_row = tk.Frame(right_frame, bg=SURFACE_CONTAINER)
+        btn_row.pack(fill=tk.X, pady=(0, SP_2))
+
+        self.clear_button = ttk.Button(btn_row, text="Clear Shape", command=self.clear_shapes, state=tk.DISABLED)
+        self.clear_button.pack(side=tk.LEFT, padx=(0, SP_2))
+
+        ttk.Button(btn_row, text="Copy SVG", command=self._copy_svg).pack(side=tk.LEFT, padx=(0, SP_2))
+
+        ttk.Button(btn_row, text="Export SVG", command=self._export_svg, style="Primary.TButton").pack(side=tk.RIGHT)
+
         self._update_mode()
 
-    # --- Mode and UI Update ---
+    # ── Mode / UI ─────────────────────────────────────────────────
+
+    def _on_pill_mode_change(self, value):
+        self.current_mode.set(value)
+        self._update_mode()
 
     def _update_mode(self):
-        """Updates UI elements based on the selected drawing mode."""
         mode = self.current_mode.get()
-        self.clear_shapes() # Clear existing shapes when mode changes
-
+        self.clear_shapes()
         if mode == "circle":
-            # Show radius input
-            self.radius_frame.grid() # Make visible by placing in grid
+            self.radius_frame.pack(fill=tk.X, pady=(0, SP_2))
             self.clear_button.config(text="Clear Circle")
-            self.canvas.config(cursor=self.cursor_crosshair)
+            self.canvas.config(cursor="crosshair")
         elif mode == "polygon":
-            # Hide radius input
-            self.radius_frame.grid_remove() # Hide without losing grid config
+            self.radius_frame.pack_forget()
             self.clear_button.config(text="Clear Polygon")
-            self.canvas.config(cursor=self.cursor_crosshair)
-        else:
-             self.canvas.config(cursor="") # Default cursor if no image
-
+            self.canvas.config(cursor="crosshair")
+        elif mode == "rectangle":
+            self.radius_frame.pack_forget()
+            self.clear_button.config(text="Clear Rectangle")
+            self.canvas.config(cursor="crosshair")
         self._update_instructions()
 
     def _update_instructions(self):
-        """Sets the instruction label text based on current state."""
         if not self.original_image:
             self.instruction_label.config(text="Load an image to begin.")
             return
-
         mode = self.current_mode.get()
         if mode == "circle":
-            if self.shape_drawn:
-                self.instruction_label.config(text="Circle generated. Click 'Clear Circle' to draw another.")
-            else:
-                self.instruction_label.config(text="Click on the image to define the circle's center.")
+            self.instruction_label.config(
+                text="Circle generated. Clear to draw another." if self.shape_drawn
+                else "Click on the image to define the circle center."
+            )
         elif mode == "polygon":
             if self.is_polygon_closed:
-                self.instruction_label.config(text=f"Polygon closed ({len(self.polygon_original_points)} points). Click 'Clear Polygon' to start over.")
+                self.instruction_label.config(text=f"Polygon closed ({len(self.polygon_original_points)} pts). Clear to restart.")
             elif not self.polygon_original_points:
-                self.instruction_label.config(text="Click on the image to add the first point of the polygon.")
+                self.instruction_label.config(text="Click to add the first polygon point.")
             elif len(self.polygon_original_points) < 3:
-                 self.instruction_label.config(text=f"Click to add more points. Current points: {len(self.polygon_original_points)}.")
+                self.instruction_label.config(text=f"Click to add points ({len(self.polygon_original_points)} so far).")
             else:
-                 self.instruction_label.config(text=f"Click to add more points, or click near the first point (<{self.POLYGON_CLOSING_THRESHOLD}px) to close. Points: {len(self.polygon_original_points)}.")
+                self.instruction_label.config(text=f"Click near the first point to close. ({len(self.polygon_original_points)} pts)")
+        elif mode == "rectangle":
+            if self.rect_second_original:
+                self.instruction_label.config(text="Rectangle drawn. Clear to draw another.")
+            elif self.rect_first_original:
+                self.instruction_label.config(text="Click to set the opposite corner.")
+            else:
+                self.instruction_label.config(text="Click to set the first corner of the rectangle.")
 
-    # --- Image Loading and Handling ---
+    # ── Image ─────────────────────────────────────────────────────
 
     def load_image(self):
-        """
-        Opens a file dialog, loads image, displays it scaled to fit,
-        calculates display metrics, and resets state.
-        """
-        file_path = filedialog.askopenfilename(
+        f = filedialog.askopenfilename(
             title="Select an Image",
             filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff"), ("All Files", "*.*")],
-            parent=self.master # Specify parent for dialog
+            parent=self.master,
         )
-        if not file_path: return
-
+        if not f:
+            return
         try:
-            # Load the original image
-            self.original_image = Image.open(file_path)
-            self.image_path = file_path
-
-            # Reset state before displaying
+            self.original_image = Image.open(f)
+            self.image_path = f
+            self.zoom_level = 1.0
+            self._update_zoom_label()
             self.clear_shapes()
-            self.canvas.config(cursor=self.cursor_crosshair) # Set appropriate cursor
-
-            # Display the image (this will trigger _on_canvas_resize -> _display_loaded_image)
+            self.canvas.config(cursor="crosshair")
             self._display_loaded_image()
-
             self.clear_button.config(state=tk.NORMAL)
-
-
         except Exception as e:
-            messagebox.showerror("Error Loading Image", f"Failed to load image: {e}", parent=self.master)
+            messagebox.showerror("Error", f"Failed to load image: {e}", parent=self.master)
             self._reset_image_state()
 
     def _on_canvas_resize(self, event=None):
-        """Handles canvas resize events to redraw the image scaled correctly."""
-        # This check prevents errors during initial setup or if image is cleared
         if self.original_image and self.canvas.winfo_width() > 1 and self.canvas.winfo_height() > 1:
             self._display_loaded_image()
 
-
     def _display_loaded_image(self):
-        """
-        Scales the original image to fit the current canvas size,
-        displays it, and calculates the image's position and scale.
-        Also redraws any existing shapes.
-        """
         if not self.original_image:
             return
-
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
-
-        # Prevent division by zero if canvas is too small initially
-        if canvas_width <= 1 or canvas_height <= 1:
-            return # Wait for a proper size
-
-        img_width, img_height = self.original_image.size
-
-        # Calculate scaling factor to fit image within canvas while maintaining aspect ratio
-        width_ratio = canvas_width / img_width
-        height_ratio = canvas_height / img_height
-        scale_factor = min(width_ratio, height_ratio)
-
-        # Calculate the dimensions of the displayed image
-        display_width = int(img_width * scale_factor)
-        display_height = int(img_height * scale_factor)
-
-        # Resize the image using LANCZOS for better quality
-        self.display_image = self.original_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
+        cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
+        if cw <= 1 or ch <= 1:
+            return
+        iw, ih = self.original_image.size
+        # Base scale factor to fit image in canvas, then apply zoom
+        base_sf = min(cw / iw, ch / ih)
+        sf = base_sf * self.zoom_level
+        dw, dh = int(iw * sf), int(ih * sf)
+        self.display_image = self.original_image.resize((dw, dh), Image.Resampling.LANCZOS)
         self.tk_image = ImageTk.PhotoImage(self.display_image)
-
-        # Calculate the top-left corner (x, y) to center the image on the canvas
-        display_x = (canvas_width - display_width) / 2
-        display_y = (canvas_height - display_height) / 2
-
-        # Store the display rectangle and scale factor
-        self.image_display_rect = (display_x, display_y, display_width, display_height)
-
-        # Clear previous image and draw the new one
+        dx, dy = (cw - dw) / 2, (ch - dh) / 2
+        self.image_display_rect = (dx, dy, dw, dh)
         if self.canvas_image_id:
             self.canvas.delete(self.canvas_image_id)
-        self.canvas_image_id = self.canvas.create_image(display_x, display_y, anchor=tk.NW, image=self.tk_image)
-
-        # Bring drawn shapes to the front if they exist
+        self.canvas_image_id = self.canvas.create_image(dx, dy, anchor=tk.NW, image=self.tk_image)
         self.canvas.tag_raise("drawn_shape")
-
-        # Recalculate canvas coordinates for existing shapes and redraw them
         self._redraw_feedback_shapes()
-        self._update_instructions() # Update instructions as image is now loaded
+        self._update_instructions()
 
     def _reset_image_state(self):
-        """Resets all image-related state variables."""
-        self.image_path = None
-        self.original_image = None
-        self.display_image = None
-        self.tk_image = None
+        self.image_path = self.original_image = self.display_image = self.tk_image = None
         if self.canvas_image_id:
             self.canvas.delete(self.canvas_image_id)
             self.canvas_image_id = None
         self.image_display_rect = None
         self.clear_button.config(state=tk.DISABLED)
-        self.canvas.config(cursor="") # Reset cursor
-        self.clear_shapes() # Also clear any drawing state
+        self.canvas.config(cursor="")
+        self.clear_shapes()
         self._update_instructions()
 
+    # ── Zoom ──────────────────────────────────────────────────────
 
-    # --- Coordinate Conversion ---
+    def _zoom(self, delta):
+        new_zoom = round(self.zoom_level + delta, 2)
+        if new_zoom < self.zoom_min or new_zoom > self.zoom_max:
+            return
+        self.zoom_level = new_zoom
+        self._update_zoom_label()
+        if self.original_image:
+            self._display_loaded_image()
 
-    def _canvas_to_original_coords(self, canvas_x, canvas_y):
-        """Converts canvas coordinates to original image coordinates."""
+    def _update_zoom_label(self):
+        pct = int(self.zoom_level * 100)
+        self._zoom_label.config(text=f"{pct}%")
+
+    # ── Coords ────────────────────────────────────────────────────
+
+    def _canvas_to_original_coords(self, cx, cy):
         if not self.image_display_rect or not self.original_image:
             return None
-
-        disp_x, disp_y, disp_w, disp_h = self.image_display_rect
-        orig_w, orig_h = self.original_image.size
-
-        # Check if click is within the displayed image bounds
-        if not (disp_x <= canvas_x < disp_x + disp_w and disp_y <= canvas_y < disp_y + disp_h):
-            # print("Click outside displayed image bounds.") # Optional debug
+        dx, dy, dw, dh = self.image_display_rect
+        ow, oh = self.original_image.size
+        if not (dx <= cx < dx + dw and dy <= cy < dy + dh) or dw == 0 or dh == 0:
             return None
+        return (max(0, min(ow, ((cx - dx) / dw) * ow)), max(0, min(oh, ((cy - dy) / dh) * oh)))
 
-        # Calculate coordinates relative to the displayed image's top-left corner
-        x_in_display = canvas_x - disp_x
-        y_in_display = canvas_y - disp_y
-
-        # Scale back up to original image coordinates
-        # Prevent division by zero if display width/height is somehow zero
-        if disp_w == 0 or disp_h == 0: return None
-        original_x = (x_in_display / disp_w) * orig_w
-        original_y = (y_in_display / disp_h) * orig_h
-
-        # Clamp to ensure coordinates are within the original image dimensions
-        original_x = max(0, min(orig_w, original_x))
-        original_y = max(0, min(orig_h, original_y))
-
-        return (original_x, original_y)
-
-    def _original_to_canvas_coords(self, original_x, original_y):
-        """Converts original image coordinates to canvas coordinates."""
+    def _original_to_canvas_coords(self, ox, oy):
         if not self.image_display_rect or not self.original_image:
             return None
+        dx, dy, dw, dh = self.image_display_rect
+        ow, oh = self.original_image.size
+        if ow == 0 or oh == 0:
+            return None
+        return ((ox / ow) * dw + dx, (oy / oh) * dh + dy)
 
-        disp_x, disp_y, disp_w, disp_h = self.image_display_rect
-        orig_w, orig_h = self.original_image.size
-
-        # Prevent division by zero
-        if orig_w == 0 or orig_h == 0: return None
-
-        # Scale down to displayed image coordinates
-        x_in_display = (original_x / orig_w) * disp_w
-        y_in_display = (original_y / orig_h) * disp_h
-
-        # Add the display offset to get canvas coordinates
-        canvas_x = x_in_display + disp_x
-        canvas_y = y_in_display + disp_y
-
-        return (canvas_x, canvas_y)
-
-    # --- Click Handling ---
+    # ── Click ─────────────────────────────────────────────────────
 
     def on_canvas_click(self, event):
-        """Handles mouse clicks on the canvas based on the current mode."""
         if not self.original_image or not self.image_display_rect:
-            messagebox.showwarning("No Image", "Please load an image first.", parent=self.master)
+            messagebox.showwarning("No Image", "Load an image first.", parent=self.master)
             return
-
-        canvas_x, canvas_y = event.x, event.y
-        original_coords = self._canvas_to_original_coords(canvas_x, canvas_y)
-
-        if original_coords is None:
-            # Click was outside the image area on the canvas
+        oc = self._canvas_to_original_coords(event.x, event.y)
+        if oc is None:
             return
-
         mode = self.current_mode.get()
-
         if mode == "circle":
-            self._handle_circle_click(canvas_x, canvas_y, original_coords)
+            self._handle_circle_click(event.x, event.y, oc)
         elif mode == "polygon":
-            self._handle_polygon_click(canvas_x, canvas_y, original_coords)
+            self._handle_polygon_click(event.x, event.y, oc)
+        elif mode == "rectangle":
+            self._handle_rectangle_click(event.x, event.y, oc)
+        if (
+            (mode == "circle" and self.center_original_coords)
+            or (mode == "polygon" and self.polygon_original_points)
+            or (mode == "rectangle" and self.rect_first_original)
+        ):
+            self.shape_drawn = True
+            self._update_instructions()
 
-        # Mark that some shape element now exists (or is being drawn)
-        if (mode == "circle" and self.center_original_coords) or \
-           (mode == "polygon" and self.polygon_original_points):
-             self.shape_drawn = True
-             self._update_instructions()
-
-
-    def _handle_circle_click(self, canvas_x, canvas_y, original_coords):
-        """Handles click logic for Circle mode."""
-        # In circle mode, each click defines a new center
-        self.clear_shapes(keep_mode=True) # Clear previous circle before drawing new
-
-        radius_original = self._get_circle_radius()
-        if radius_original is None: return # Validation failed
-
-        self.center_original_coords = original_coords
-        self.center_canvas_coords = (canvas_x, canvas_y)
-
+    def _handle_circle_click(self, cx, cy, oc):
+        self.clear_shapes(keep_mode=True)
+        r = self._get_circle_radius()
+        if r is None:
+            return
+        self.center_original_coords = oc
+        self.center_canvas_coords = (cx, cy)
         self._draw_circle_feedback()
         self._generate_circle_svg()
 
-    def _handle_polygon_click(self, canvas_x, canvas_y, original_coords):
-        """Handles click logic for Polygon mode."""
+    def _handle_polygon_click(self, cx, cy, oc):
         if self.is_polygon_closed:
-            messagebox.showinfo("Polygon Closed", "Polygon is already closed. Click 'Clear Polygon' to start a new one.", parent=self.master)
+            messagebox.showinfo("Closed", "Polygon closed. Clear to start new.", parent=self.master)
             return
-
-        # Check for closing click (if enough points exist)
         if len(self.polygon_canvas_points) >= 3:
-            first_canvas_x, first_canvas_y = self.polygon_canvas_points[0]
-            dist_sq = (canvas_x - first_canvas_x)**2 + (canvas_y - first_canvas_y)**2
-            if dist_sq < self.POLYGON_CLOSING_THRESHOLD**2:
+            fx, fy = self.polygon_canvas_points[0]
+            if (cx - fx)**2 + (cy - fy)**2 < self.POLYGON_CLOSING_THRESHOLD**2:
                 self.is_polygon_closed = True
-                print("Polygon closed by clicking near start.") # Debug info
-                # Don't add the closing click as a new point
-                self._draw_polygon_feedback() # Redraw to show the closed line
-                self._generate_polygon_svg() # Generate final SVG with 'Z'
+                self._draw_polygon_feedback()
+                self._generate_polygon_svg()
                 self._update_instructions()
-                return # Stop processing this click
-
-        # If not closing, add the new point
-        self.polygon_original_points.append(original_coords)
-        self.polygon_canvas_points.append((canvas_x, canvas_y))
-
+                return
+        self.polygon_original_points.append(oc)
+        self.polygon_canvas_points.append((cx, cy))
         self._draw_polygon_feedback()
-        self._generate_polygon_svg() # Update SVG as points are added
+        self._generate_polygon_svg()
 
-    # --- Drawing Feedback ---
+    def _handle_rectangle_click(self, cx, cy, oc):
+        if self.rect_second_original:
+            # Already drawn, ignore
+            messagebox.showinfo("Drawn", "Rectangle already drawn. Clear to start new.", parent=self.master)
+            return
+        if self.rect_first_original is None:
+            # First corner
+            self.rect_first_original = oc
+            self.rect_first_canvas = (cx, cy)
+            self._draw_rectangle_feedback()
+        else:
+            # Second corner
+            self.rect_second_original = oc
+            self.rect_second_canvas = (cx, cy)
+            self._draw_rectangle_feedback()
+            self._generate_rectangle_svg()
+
+    # ── Drawing feedback ──────────────────────────────────────────
+
+    def _get_draw_color(self):
+        """Return the current drawing color from the color picker."""
+        c = self.color_var.get()
+        # Validate it's a usable color string
+        try:
+            self.canvas.winfo_rgb(c)
+            return c
+        except Exception:
+            return SECONDARY
+
+    def _get_draw_width(self):
+        """Return the current stroke width for canvas feedback."""
+        return max(1, self.stroke_width_var.get())
 
     def _clear_drawn_feedback(self):
-        """Removes all feedback shapes (markers, lines) from the canvas."""
-        for item_id in self.drawn_canvas_items:
-            self.canvas.delete(item_id)
+        for i in self.drawn_canvas_items:
+            self.canvas.delete(i)
         self.drawn_canvas_items = []
 
     def _redraw_feedback_shapes(self):
-        """Clears existing feedback and redraws based on current state and mode."""
         self._clear_drawn_feedback()
-        if not self.original_image: return # No image, nothing to draw on
-
+        if not self.original_image:
+            return
         mode = self.current_mode.get()
         if mode == "circle" and self.center_original_coords:
-            # Recalculate canvas coords for center
-            canvas_coords = self._original_to_canvas_coords(*self.center_original_coords)
-            if canvas_coords:
-                self.center_canvas_coords = canvas_coords
+            cc = self._original_to_canvas_coords(*self.center_original_coords)
+            if cc:
+                self.center_canvas_coords = cc
                 self._draw_circle_feedback()
         elif mode == "polygon" and self.polygon_original_points:
-            # Recalculate canvas coords for all polygon points
-            self.polygon_canvas_points = []
-            for orig_pt in self.polygon_original_points:
-                canvas_pt = self._original_to_canvas_coords(*orig_pt)
-                if canvas_pt:
-                    self.polygon_canvas_points.append(canvas_pt)
-                else:
-                    # Handle case where a point might be off-canvas after resize (unlikely with clamping)
-                    print(f"Warning: Original point {orig_pt} could not be converted to canvas coordinates.")
-                    # Decide how to handle this - skip point, clear shape? For now, just skip.
-                    pass
-            # Only draw if we still have points
+            self.polygon_canvas_points = [c for c in (self._original_to_canvas_coords(*p) for p in self.polygon_original_points) if c]
             if self.polygon_canvas_points:
-                 self._draw_polygon_feedback()
-
+                self._draw_polygon_feedback()
+        elif mode == "rectangle" and self.rect_first_original:
+            fc = self._original_to_canvas_coords(*self.rect_first_original)
+            if fc:
+                self.rect_first_canvas = fc
+            if self.rect_second_original:
+                sc = self._original_to_canvas_coords(*self.rect_second_original)
+                if sc:
+                    self.rect_second_canvas = sc
+            self._draw_rectangle_feedback()
 
     def _draw_circle_feedback(self):
-        """Draws the circle outline and center marker on the canvas."""
-        if not self.center_canvas_coords: return
-
-        radius_original = self._get_circle_radius()
-        if radius_original is None: return
-
-        # Calculate radius for canvas display (scaled)
-        # Use the width scale factor for radius scaling
-        if not self.image_display_rect or self.image_display_rect[2] == 0 or self.original_image.size[0] == 0:
-             return # Cannot calculate scale
-        radius_canvas = radius_original * (self.image_display_rect[2] / self.original_image.size[0])
-
-
-        canvas_x, canvas_y = self.center_canvas_coords
-
-        # Clear previous feedback first (important if only radius changes)
+        if not self.center_canvas_coords:
+            return
+        r = self._get_circle_radius()
+        if r is None or not self.image_display_rect or self.image_display_rect[2] == 0 or self.original_image.size[0] == 0:
+            return
+        rc = r * (self.image_display_rect[2] / self.original_image.size[0])
+        cx, cy = self.center_canvas_coords
+        color = self._get_draw_color()
+        width = self._get_draw_width()
         self._clear_drawn_feedback()
-
-        # Draw Circle outline
-        circle_id = self.canvas.create_oval(
-            canvas_x - radius_canvas, canvas_y - radius_canvas,
-            canvas_x + radius_canvas, canvas_y + radius_canvas,
-            outline="cyan", width=2, tags="drawn_shape" # Use tag for layering
+        self.drawn_canvas_items.append(
+            self.canvas.create_oval(cx - rc, cy - rc, cx + rc, cy + rc, outline=color, width=width, tags="drawn_shape")
         )
-        self.drawn_canvas_items.append(circle_id)
-
-        # Draw Center marker
-        marker_radius = 3
-        marker_id = self.canvas.create_oval(
-            canvas_x - marker_radius, canvas_y - marker_radius,
-            canvas_x + marker_radius, canvas_y + marker_radius,
-            fill="red", outline="red", tags="drawn_shape"
+        mr = 3
+        self.drawn_canvas_items.append(
+            self.canvas.create_oval(cx - mr, cy - mr, cx + mr, cy + mr, fill=ERROR, outline=ERROR, tags="drawn_shape")
         )
-        self.drawn_canvas_items.append(marker_id)
-        self.canvas.tag_raise("drawn_shape") # Ensure feedback is on top of image
-
+        self.canvas.tag_raise("drawn_shape")
 
     def _draw_polygon_feedback(self):
-        """Draws polygon vertices and connecting lines on the canvas."""
-        if not self.polygon_canvas_points: return
-
-        # Clear previous feedback first
+        if not self.polygon_canvas_points:
+            return
         self._clear_drawn_feedback()
-
-        marker_radius = 3
-        # Draw markers for each vertex
+        color = self._get_draw_color()
+        width = self._get_draw_width()
+        mr = 3
         for i, (px, py) in enumerate(self.polygon_canvas_points):
-            fill_color = "blue" if i == 0 else "red" # First point blue, others red
-            marker_id = self.canvas.create_oval(
-                px - marker_radius, py - marker_radius,
-                px + marker_radius, py + marker_radius,
-                fill=fill_color, outline=fill_color, tags="drawn_shape"
+            c = SECONDARY if i == 0 else ERROR
+            self.drawn_canvas_items.append(
+                self.canvas.create_oval(px - mr, py - mr, px + mr, py + mr, fill=c, outline=c, tags="drawn_shape")
             )
-            self.drawn_canvas_items.append(marker_id)
-
-        # Draw lines connecting vertices
         if len(self.polygon_canvas_points) > 1:
             for i in range(len(self.polygon_canvas_points) - 1):
                 x1, y1 = self.polygon_canvas_points[i]
-                x2, y2 = self.polygon_canvas_points[i+1]
-                line_id = self.canvas.create_line(x1, y1, x2, y2, fill="yellow", width=2, tags="drawn_shape")
-                self.drawn_canvas_items.append(line_id)
-
-            # Draw the closing line if the polygon is closed
-            if self.is_polygon_closed and len(self.polygon_canvas_points) > 1:
+                x2, y2 = self.polygon_canvas_points[i + 1]
+                self.drawn_canvas_items.append(
+                    self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width, tags="drawn_shape")
+                )
+            if self.is_polygon_closed:
                 x1, y1 = self.polygon_canvas_points[-1]
                 x2, y2 = self.polygon_canvas_points[0]
-                line_id = self.canvas.create_line(x1, y1, x2, y2, fill="yellow", width=2, tags="drawn_shape")
-                self.drawn_canvas_items.append(line_id)
+                self.drawn_canvas_items.append(
+                    self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width, tags="drawn_shape")
+                )
+        self.canvas.tag_raise("drawn_shape")
 
-        self.canvas.tag_raise("drawn_shape") # Ensure feedback is on top of image
+    def _draw_rectangle_feedback(self):
+        self._clear_drawn_feedback()
+        color = self._get_draw_color()
+        width = self._get_draw_width()
+        mr = 3
+        if self.rect_first_canvas:
+            fx, fy = self.rect_first_canvas
+            if self.rect_second_canvas:
+                sx, sy = self.rect_second_canvas
+                # Draw dashed rectangle
+                self.drawn_canvas_items.append(
+                    self.canvas.create_rectangle(
+                        fx, fy, sx, sy,
+                        outline=color, width=width, dash=(6, 4), tags="drawn_shape",
+                    )
+                )
+                # Corner markers
+                for mx, my in [(fx, fy), (sx, sy)]:
+                    self.drawn_canvas_items.append(
+                        self.canvas.create_oval(mx - mr, my - mr, mx + mr, my + mr, fill=ERROR, outline=ERROR, tags="drawn_shape")
+                    )
+            else:
+                # Just the first corner marker
+                self.drawn_canvas_items.append(
+                    self.canvas.create_oval(fx - mr, fy - mr, fx + mr, fy + mr, fill=ERROR, outline=ERROR, tags="drawn_shape")
+                )
+        self.canvas.tag_raise("drawn_shape")
 
-    # --- SVG Generation ---
+    # ── SVG generation ────────────────────────────────────────────
+
+    def _svg_stroke_attr(self):
+        """Return the stroke-width attribute string."""
+        sw = round(self.stroke_width_var.get(), 1)
+        sw_s = f"{int(sw)}" if sw == int(sw) else f"{sw}"
+        return f' stroke-width="{sw_s}"'
 
     def _generate_circle_svg(self):
-        """Generates the SVG path data for the circle."""
         if not self.center_original_coords:
             self.generated_svg_path = ""
             self._update_output_text()
             return
-
-        radius_original = self._get_circle_radius()
-        if radius_original is None: return # Validation failed
-
+        r = self._get_circle_radius()
+        if r is None:
+            return
         cx, cy = self.center_original_coords
-        r = radius_original
-
-        # Round coordinates and radius for SVG output
-        cx_r = round(cx, 2)
-        cy_r = round(cy, 2)
         r_r = round(r, 2)
-
-        # Format radius to avoid unnecessary decimals if it's an integer
-        r_str = f"{int(r_r)}" if r_r == int(r_r) else f"{r_r:.2f}"
-
-        # Move to the top point of the circle
-        start_x = cx_r
-        start_y = round(cy_r - r_r, 2)
-
-        # Calculate endpoint y-coordinates relative to start_y for arcs
-        # Use 2*r for the relative move, ensuring precision
-        dy1_r = round(2 * r_r, 2)
-        dy2_r = round(-2 * r_r, 2)
-
-        # Format relative moves
-        dy1_str = f"{int(dy1_r)}" if dy1_r == int(dy1_r) else f"{dy1_r:.2f}"
-        dy2_str = f"{int(dy2_r)}" if dy2_r == int(dy2_r) else f"{dy2_r:.2f}"
-
-
-        # First arc: from top to bottom (180 degrees) - relative move
-        arc1 = f"a{r_str},{r_str} 0 1 0 0,{dy1_str}" # large-arc=1, sweep=0
-
-        # Second arc: from bottom back to top (180 degrees) - relative move
-        arc2 = f"a{r_str},{r_str} 0 1 0 0,{dy2_str}" # large-arc=1, sweep=0
-
-        # Construct the full path string
-        self.generated_svg_path = f"M{start_x:.2f} {start_y:.2f}{arc1}{arc2}Z"
+        r_s = f"{int(r_r)}" if r_r == int(r_r) else f"{r_r:.2f}"
+        sy = round(round(cy, 2) - r_r, 2)
+        dy1 = round(2 * r_r, 2)
+        dy2 = round(-2 * r_r, 2)
+        dy1s = f"{int(dy1)}" if dy1 == int(dy1) else f"{dy1:.2f}"
+        dy2s = f"{int(dy2)}" if dy2 == int(dy2) else f"{dy2:.2f}"
+        path_d = f"M{round(cx, 2):.2f} {sy:.2f}a{r_s},{r_s} 0 1 0 0,{dy1s}a{r_s},{r_s} 0 1 0 0,{dy2s}Z"
+        sw_attr = self._svg_stroke_attr()
+        color = self._get_draw_color()
+        self.generated_svg_path = f'<path d="{path_d}" fill="none" stroke="{color}"{sw_attr} />'
+        self._store_svg_element(self.generated_svg_path)
         self._update_output_text()
 
     def _generate_polygon_svg(self):
-        """Generates the SVG path data for the polygon."""
         if not self.polygon_original_points:
             self.generated_svg_path = ""
             self._update_output_text()
             return
-
-        # Build path segments
-        path_segments = []
-        for i, (ox, oy) in enumerate(self.polygon_original_points):
-            prefix = "M" if i == 0 else "L"
-            # Round original coordinates for SVG
-            ox_r = round(ox, 2)
-            oy_r = round(oy, 2)
-            path_segments.append(f"{prefix}{ox_r:.2f} {oy_r:.2f}")
-
-        path_data = " ".join(path_segments)
-
-        # Add 'Z' to close the path if it's marked as closed or has enough points
-        # Swift adds Z if count > 2, let's match that logic for implicit closing view
-        # But also explicitly add if is_polygon_closed is True
+        segs = [f"{'M' if i == 0 else 'L'}{round(ox, 2):.2f} {round(oy, 2):.2f}" for i, (ox, oy) in enumerate(self.polygon_original_points)]
+        d = " ".join(segs)
         if self.is_polygon_closed or len(self.polygon_original_points) > 2:
-            path_data += " Z"
-
-        self.generated_svg_path = path_data
+            d += " Z"
+        sw_attr = self._svg_stroke_attr()
+        color = self._get_draw_color()
+        self.generated_svg_path = f'<path d="{d}" fill="none" stroke="{color}"{sw_attr} />'
+        self._store_svg_element(self.generated_svg_path)
         self._update_output_text()
 
+    def _generate_rectangle_svg(self):
+        if not self.rect_first_original or not self.rect_second_original:
+            self.generated_svg_path = ""
+            self._update_output_text()
+            return
+        x1, y1 = self.rect_first_original
+        x2, y2 = self.rect_second_original
+        rx = round(min(x1, x2), 2)
+        ry = round(min(y1, y2), 2)
+        rw = round(abs(x2 - x1), 2)
+        rh = round(abs(y2 - y1), 2)
+        sw_attr = self._svg_stroke_attr()
+        color = self._get_draw_color()
+        self.generated_svg_path = f'<rect x="{rx:.2f}" y="{ry:.2f}" width="{rw:.2f}" height="{rh:.2f}" fill="none" stroke="{color}"{sw_attr} />'
+        self._store_svg_element(self.generated_svg_path)
+        self._update_output_text()
+
+    def _store_svg_element(self, element):
+        """Store the latest SVG element for export. Replace last if same shape is being refined."""
+        # For polygon, keep replacing until closed; for circle/rect always replace last
+        mode = self.current_mode.get()
+        if mode == "polygon" and not self.is_polygon_closed:
+            # Update the in-progress polygon element
+            if self.all_svg_elements and self.all_svg_elements[-1].startswith('<path d="M') and 'polygon-wip' in (getattr(self, '_last_tag', '') or ''):
+                self.all_svg_elements[-1] = element
+            else:
+                self.all_svg_elements.append(element)
+                self._last_tag = 'polygon-wip'
+        elif mode == "polygon" and self.is_polygon_closed:
+            # Finalize
+            if self.all_svg_elements and getattr(self, '_last_tag', '') == 'polygon-wip':
+                self.all_svg_elements[-1] = element
+            else:
+                self.all_svg_elements.append(element)
+            self._last_tag = 'polygon-done'
+        else:
+            self.all_svg_elements.append(element)
+            self._last_tag = ''
 
     def _update_output_text(self):
-        """Updates the SVG output text area."""
         self.output_text.config(state=tk.NORMAL)
-        self.output_text.delete('1.0', tk.END)
+        self.output_text.delete("1.0", tk.END)
         self.output_text.insert(tk.END, self.generated_svg_path)
         self.output_text.config(state=tk.DISABLED)
-        self._manage_scrollbar_visibility() # Update scrollbar based on new content
+        self._manage_scrollbar_visibility()
 
     def _manage_scrollbar_visibility(self, event=None):
-        """Shows or hides the scrollbar for output_text based on content."""
         if not hasattr(self.output_text, 'vbar') or not self.output_text.vbar:
-            return # Should not happen with ScrolledText
-
-        # Force Tkinter to update layout and pending tasks to get accurate yview
+            return
         self.output_text.update_idletasks()
-
         first, last = self.output_text.yview()
-
-        # If first is 0.0 and last is 1.0, all content is visible
         if first == 0.0 and last == 1.0:
-            # Content fits, hide scrollbar if it's currently visible
             if self.output_text.vbar.winfo_ismapped():
                 self.output_text.vbar.pack_forget()
         else:
-            # Content overflows, show scrollbar if it's currently hidden
             if not self.output_text.vbar.winfo_ismapped():
-                # Re-pack the scrollbar. ScrolledText internally packs the Text widget
-                # to the LEFT and the Scrollbar to the RIGHT within its internal frame.
-                # We replicate the original packing for the scrollbar.
                 self.output_text.vbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+    # ── Stroke width callback ─────────────────────────────────────
 
+    def _on_stroke_change(self, value=None):
+        sw = round(self.stroke_width_var.get(), 1)
+        self._stroke_value_label.config(text=f"{sw}")
+        # Redraw feedback and regenerate SVG
+        self._redraw_feedback_shapes()
+        mode = self.current_mode.get()
+        if mode == "circle" and self.center_original_coords:
+            self._generate_circle_svg()
+        elif mode == "polygon" and self.polygon_original_points:
+            self._generate_polygon_svg()
+        elif mode == "rectangle" and self.rect_second_original:
+            self._generate_rectangle_svg()
 
-    # --- Utility and State Management ---
+    # ── Color callbacks ───────────────────────────────────────────
+
+    def _pick_color(self, event=None):
+        result = colorchooser.askcolor(color=self.color_var.get(), title="Pick Stroke Color", parent=self.master)
+        if result and result[1]:
+            self.color_var.set(result[1])
+            self._apply_color_change()
+
+    def _on_color_entry_change(self, event=None):
+        self._apply_color_change()
+
+    def _apply_color_change(self):
+        color = self.color_var.get()
+        try:
+            self.canvas.winfo_rgb(color)
+        except Exception:
+            return
+        self._color_swatch.itemconfig(self._swatch_rect, fill=color)
+        # Redraw feedback and regenerate SVG
+        self._redraw_feedback_shapes()
+        mode = self.current_mode.get()
+        if mode == "circle" and self.center_original_coords:
+            self._generate_circle_svg()
+        elif mode == "polygon" and self.polygon_original_points:
+            self._generate_polygon_svg()
+        elif mode == "rectangle" and self.rect_second_original:
+            self._generate_rectangle_svg()
+
+    # ── Copy / Export ─────────────────────────────────────────────
+
+    def _copy_svg(self):
+        text = self.generated_svg_path.strip()
+        if not text:
+            return
+        self.clipboard_clear()
+        self.clipboard_append(text)
+
+    def _export_svg(self):
+        if not self.all_svg_elements:
+            messagebox.showinfo("Nothing to Export", "Draw at least one shape first.", parent=self.master)
+            return
+        if not self.original_image:
+            messagebox.showinfo("No Image", "Load an image first.", parent=self.master)
+            return
+        path = filedialog.asksaveasfilename(
+            title="Export SVG",
+            defaultextension=".svg",
+            filetypes=[("SVG Files", "*.svg"), ("All Files", "*.*")],
+            parent=self.master,
+        )
+        if not path:
+            return
+        ow, oh = self.original_image.size
+        elements = "\n  ".join(self.all_svg_elements)
+        svg_content = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {ow} {oh}">\n'
+            f'  {elements}\n'
+            f'</svg>\n'
+        )
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(svg_content)
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Failed to write SVG: {e}", parent=self.master)
+
+    # ── Utilities ─────────────────────────────────────────────────
 
     def _validate_radius(self, P):
-        """Validation function for radius entry: allows only numbers and one dot."""
-        if P == "": return True # Allow empty string (e.g., during deletion)
+        if P == "":
+            return True
         try:
-            if P.count('.') <= 1:
-                float(P) # Check if it's a valid float representation
-                return True # Allow if it's a number or partial number
-            else:
-                return False # Disallow more than one dot
+            return P.count('.') <= 1 and float(P) is not None
         except ValueError:
-            # Handle cases like "-" or "." at the beginning if needed,
-            # but for radius, we usually want positive numbers.
-            # Let's disallow anything that doesn't form a valid number start.
             return False
 
     def _get_circle_radius(self):
-        """Gets and validates the circle radius from the entry field."""
         try:
-            radius_str = self.radius_var.get()
-            if not radius_str: # Handle empty case
-                 messagebox.showwarning("Invalid Radius", "Radius cannot be empty. Using default (20).", parent=self.master)
-                 self.radius_var.set("20")
-                 return 20.0
-            radius = float(radius_str)
-            if radius <= 0:
-                messagebox.showwarning("Invalid Radius", "Radius must be a positive number. Using default (20).", parent=self.master)
+            s = self.radius_var.get()
+            if not s:
                 self.radius_var.set("20")
                 return 20.0
-            return radius # Return the valid float
+            v = float(s)
+            if v <= 0:
+                self.radius_var.set("20")
+                return 20.0
+            return v
         except ValueError:
-            messagebox.showwarning("Invalid Radius", "Radius must be a valid number. Using default (20).", parent=self.master)
             self.radius_var.set("20")
             return 20.0
 
     def _on_radius_change(self, event=None):
-        """Callback when radius entry loses focus or Enter is pressed."""
-        # Validate the final value
-        valid_radius = self._get_circle_radius()
-        # If in circle mode and a center exists, redraw feedback and regenerate SVG
+        self._get_circle_radius()
         if self.current_mode.get() == "circle" and self.center_original_coords:
             self._draw_circle_feedback()
             self._generate_circle_svg()
 
-
     def clear_shapes(self, keep_mode=False):
-        """
-        Removes drawn shapes, clears output, and resets drawing state.
-        Optionally keeps the current mode selected.
-        """
-        self._clear_drawn_feedback() # Remove visuals from canvas
-
-        # Reset state variables
-        self.center_original_coords = None
-        self.center_canvas_coords = None
+        self._clear_drawn_feedback()
+        self.center_original_coords = self.center_canvas_coords = None
         self.polygon_original_points = []
         self.polygon_canvas_points = []
         self.is_polygon_closed = False
+        self.rect_first_original = self.rect_first_canvas = None
+        self.rect_second_original = self.rect_second_canvas = None
         self.shape_drawn = False
         self.generated_svg_path = ""
-
-        self._update_output_text() # Clear the output text area
-
-        if self.original_image: # Only update instructions if image is loaded
+        self._update_output_text()
+        if self.original_image:
             self._update_instructions()
