@@ -583,21 +583,18 @@ class MainApp(tk.Tk):
         """Non-blocking update check with themed progress dialog."""
         import theme as _t
 
-        # Show a small "Checking..." dialog
+        DLG_W, DLG_H = 400, 180
         dlg = tk.Toplevel(self, bg=_t.SURFACE_CONTAINER_HIGH)
         dlg.title("Update")
         dlg.transient(self)
-        dlg.grab_set()
         dlg.resizable(False, False)
-        dlg.geometry("360x160")
         dlg.update_idletasks()
         apply_theme_to_titlebar(dlg)
-        # Center on parent
         mx, my = self.winfo_rootx(), self.winfo_rooty()
         mw, mh = self.winfo_width(), self.winfo_height()
-        dlg.geometry(f"+{mx + (mw - 360) // 2}+{my + (mh - 160) // 2}")
+        dlg.geometry(f"{DLG_W}x{DLG_H}+{mx + (mw - DLG_W) // 2}+{my + (mh - DLG_H) // 2}")
 
-        card = tk.Frame(dlg, bg=_t.SURFACE_CONTAINER_HIGH, padx=SP_10, pady=SP_8)
+        card = tk.Frame(dlg, bg=_t.SURFACE_CONTAINER_HIGH, padx=SP_8, pady=SP_6)
         card.pack(fill=BOTH, expand=YES)
 
         status_label = tk.Label(card, text="Checking for updates\u2026", font=BODY,
@@ -606,7 +603,7 @@ class MainApp(tk.Tk):
 
         progress_var = tk.DoubleVar(value=0)
         progress_bar = ttk.Progressbar(card, orient="horizontal", mode="indeterminate",
-                                       variable=progress_var, length=280)
+                                       variable=progress_var, length=340)
         progress_bar.pack(pady=(0, SP_4))
         progress_bar.start(15)
 
@@ -614,13 +611,18 @@ class MainApp(tk.Tk):
                              fg=_t.ON_SURFACE_VARIANT, bg=_t.SURFACE_CONTAINER_HIGH)
         pct_label.pack()
 
+        btn_frame = tk.Frame(card, bg=_t.SURFACE_CONTAINER_HIGH)
+
         cancel_flag = {"cancelled": False}
 
-        def _cancel():
+        def _safe_destroy():
             cancel_flag["cancelled"] = True
-            dlg.destroy()
+            try:
+                dlg.destroy()
+            except tk.TclError:
+                pass
 
-        dlg.protocol("WM_DELETE_WINDOW", _cancel)
+        dlg.protocol("WM_DELETE_WINDOW", _safe_destroy)
 
         def _do_check():
             available, url = is_update_available(currentVersion)
@@ -629,66 +631,67 @@ class MainApp(tk.Tk):
             self.after(0, lambda: _on_check_done(available, url))
 
         def _on_check_done(available, url):
+            if cancel_flag["cancelled"]:
+                return
             self.update_available = available
             self.download_url = url
             self.update_menu_button_text()
             self.update_dropdown_menu()
 
             if not available:
-                status_label.config(text="You are using the latest version.")
+                status_label.config(text=f"You are on the latest version ({currentVersion}).")
                 progress_bar.stop()
                 progress_bar.config(mode="determinate")
                 progress_var.set(100)
                 pct_label.config(text="")
-                dlg.after(1500, dlg.destroy)
+                dlg.after(2000, _safe_destroy)
                 return
 
             if not url or not url.startswith(('http://', 'https://')):
-                status_label.config(text="Update available but invalid URL.")
+                status_label.config(text="Update found but download URL is invalid.")
                 progress_bar.stop()
-                dlg.after(2000, dlg.destroy)
+                dlg.after(2500, _safe_destroy)
                 return
 
-            # Ask user
             progress_bar.stop()
-            try:
-                filename = os.path.basename(url)
-            except Exception:
-                filename = "update"
-            status_label.config(text=f"Update available: {filename}")
             progress_bar.config(mode="determinate")
             progress_var.set(0)
-            pct_label.config(text="Ready to download")
+            try:
+                filename = os.path.basename(url.split('?')[0])
+            except Exception:
+                filename = "update"
+            status_label.config(text=f"New version available: {filename}")
+            pct_label.config(text="")
 
-            btn_frame = tk.Frame(card, bg=_t.SURFACE_CONTAINER_HIGH)
+            # Show buttons
+            for w in btn_frame.winfo_children():
+                w.destroy()
             btn_frame.pack(pady=(SP_4, 0))
             ttk.Button(btn_frame, text="Download & Install",
                        command=lambda: _start_download(url),
                        style="Primary.TButton").pack(side="left", padx=(0, SP_2))
             ttk.Button(btn_frame, text="Later",
-                       command=dlg.destroy).pack(side="left")
+                       command=_safe_destroy).pack(side="left")
 
         def _start_download(url):
             status_label.config(text="Downloading\u2026")
             pct_label.config(text="0%")
-            # Remove buttons
-            for w in card.winfo_children():
-                if isinstance(w, tk.Frame) and w is not card:
-                    w.destroy()
+            btn_frame.pack_forget()
             threading.Thread(target=_download_worker, args=(url,), daemon=True).start()
 
         def _download_worker(url):
             download_path = os.path.join(_get_current_dir(), 'latest_app_update.exe')
             try:
-                resp = requests.get(url, stream=True, headers=headers, timeout=300)
+                # Use a clean session without the GitHub API Accept header
+                dl_headers = {'User-Agent': f'WebWeaverKit/{currentVersion}'}
+                resp = requests.get(url, stream=True, headers=dl_headers,
+                                    timeout=300, allow_redirects=True)
                 resp.raise_for_status()
                 total = int(resp.headers.get('content-length', 0))
                 downloaded = 0
                 with open(download_path, 'wb') as f:
                     for chunk in resp.iter_content(chunk_size=65536):
                         if cancel_flag["cancelled"]:
-                            f.close()
-                            _cleanup_file(download_path)
                             return
                         f.write(chunk)
                         downloaded += len(chunk)
@@ -696,11 +699,14 @@ class MainApp(tk.Tk):
                             pct = downloaded / total * 100
                             self.after(0, lambda p=pct, d=downloaded, t=total:
                                        _update_download_progress(p, d, t))
+                if cancel_flag["cancelled"]:
+                    _cleanup_file(download_path)
+                    return
                 self.after(0, lambda: _on_download_complete(download_path))
             except Exception as e:
+                _cleanup_file(download_path)
                 if not cancel_flag["cancelled"]:
                     self.after(0, lambda: _on_download_error(str(e)))
-                _cleanup_file(download_path)
 
         def _update_download_progress(pct, downloaded, total):
             if cancel_flag["cancelled"]:
@@ -709,9 +715,10 @@ class MainApp(tk.Tk):
             dl_mb = downloaded / (1024 * 1024)
             total_mb = total / (1024 * 1024)
             pct_label.config(text=f"{pct:.0f}%  ({dl_mb:.1f} / {total_mb:.1f} MB)")
-            status_label.config(text="Downloading\u2026")
 
         def _on_download_complete(download_path):
+            if cancel_flag["cancelled"]:
+                return
             status_label.config(text="Installing update\u2026")
             pct_label.config(text="Restarting app")
             progress_var.set(100)
@@ -722,9 +729,16 @@ class MainApp(tk.Tk):
                 pct_label.config(text="")
 
         def _on_download_error(error_msg):
+            if cancel_flag["cancelled"]:
+                return
             status_label.config(text="Download failed")
-            pct_label.config(text=error_msg[:60])
+            pct_label.config(text=error_msg[:80])
             progress_var.set(0)
+            # Show a close button
+            for w in btn_frame.winfo_children():
+                w.destroy()
+            btn_frame.pack(pady=(SP_4, 0))
+            ttk.Button(btn_frame, text="Close", command=_safe_destroy).pack()
 
         threading.Thread(target=_do_check, daemon=True).start()
 
