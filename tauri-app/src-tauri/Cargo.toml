@@ -27,5 +27,6 @@ tauri-plugin-shell = "2"
 image = { version = "0.25", features = ["webp", "png", "jpeg", "gif", "bmp", "tiff", "ico"] }
 regex = "1"
 base64 = "0.22"
-reqwest = { version = "0.12", features = ["json", "blocking"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures-util = "0.3"
 dirs = "6"

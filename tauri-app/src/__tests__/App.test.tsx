@@ -43,7 +43,7 @@ describe("App shell", () => {
     render(<App />);
     fireEvent.click(screen.getByText("☰"));
     fireEvent.click(screen.getByText(/ℹ About/));
-    expect(screen.getByText(/v1\.12\.0/)).toBeInTheDocument();
+    expect(screen.getByText(/v2\.0\.0/)).toBeInTheDocument();
     expect(screen.getByText(/workshop of tools/)).toBeInTheDocument();
   });
 

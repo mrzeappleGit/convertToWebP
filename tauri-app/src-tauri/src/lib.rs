@@ -515,7 +515,7 @@ fn save_settings(settings: serde_json::Value) -> Result<(), String> {
 // ── Auto-updater (GitHub releases) ───────────────────────────────
 
 const GITHUB_REPO: &str = "mrzeappleGit/convertToWebP";
-const CURRENT_VERSION: &str = "1.12.0";
+const CURRENT_VERSION: &str = "2.0.0";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -597,6 +597,95 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
     })
 }
 
+// ── Self-updater (download + replace + restart) ──────────────────
+
+#[tauri::command]
+async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    // Determine current exe path
+    let current_exe = std::env::current_exe().map_err(|e| format!("Cannot find exe: {}", e))?;
+    let exe_dir = current_exe.parent().ok_or("Cannot find exe directory")?;
+    let exe_name = current_exe.file_name().ok_or("Cannot get exe name")?.to_string_lossy().to_string();
+    let download_path = exe_dir.join("latest_update.exe");
+    let helper_bat = exe_dir.join("update_helper.bat");
+
+    // Download the new exe
+    app.emit("update-progress", "Downloading update...").ok();
+    let client = reqwest::Client::new();
+    let resp = client.get(&url)
+        .header("User-Agent", format!("WebWeaverKit/{}", CURRENT_VERSION))
+        .send().await
+        .map_err(|e| format!("Download failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Download failed: HTTP {}", resp.status()));
+    }
+
+    let total = resp.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+    let mut file = fs::File::create(&download_path).map_err(|e| format!("Cannot create file: {}", e))?;
+
+    use std::io::Write;
+    let mut stream = resp.bytes_stream();
+    use futures_util::StreamExt;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
+        file.write_all(&chunk).map_err(|e| format!("Write error: {}", e))?;
+        downloaded += chunk.len() as u64;
+        if total > 0 {
+            let pct = (downloaded as f64 / total as f64 * 100.0) as u32;
+            app.emit("update-progress", format!("Downloading... {}%", pct)).ok();
+        }
+    }
+    drop(file);
+
+    app.emit("update-progress", "Installing update...").ok();
+
+    // Write helper batch script to replace exe and restart
+    let bat_content = format!(
+        "@echo off\r\n\
+        timeout /t 2 /nobreak > NUL\r\n\
+        taskkill /IM \"{}\" /F > NUL 2>&1\r\n\
+        set retries=0\r\n\
+        :retry\r\n\
+        move /Y \"{}\" \"{}\" > NUL 2>&1\r\n\
+        if %errorlevel% EQU 0 goto success\r\n\
+        set /a retries+=1\r\n\
+        if %retries% GEQ 10 goto fail\r\n\
+        timeout /t 1 /nobreak > NUL\r\n\
+        goto retry\r\n\
+        :success\r\n\
+        timeout /t 1 /nobreak > NUL\r\n\
+        start \"\" \"{}\"\r\n\
+        goto cleanup\r\n\
+        :fail\r\n\
+        del \"{}\" > NUL 2>&1\r\n\
+        :cleanup\r\n\
+        (goto) 2>nul & del \"%~f0\"\r\n",
+        exe_name,
+        download_path.to_string_lossy(),
+        current_exe.to_string_lossy(),
+        current_exe.to_string_lossy(),
+        download_path.to_string_lossy(),
+    );
+
+    fs::write(&helper_bat, &bat_content).map_err(|e| format!("Cannot write helper: {}", e))?;
+
+    // Launch helper and exit
+    #[cfg(windows)]
+    {
+        let flags = 0x08000000 | 0x00000008 | 0x00000200; // CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        Command::new("cmd.exe")
+            .args(["/c", &helper_bat.to_string_lossy()])
+            .creation_flags(flags)
+            .spawn()
+            .map_err(|e| format!("Cannot launch helper: {}", e))?;
+    }
+
+    // Exit the app so the helper can replace the exe
+    app.exit(0);
+    Ok(())
+}
+
 // ── App entry ────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -631,6 +720,7 @@ pub fn run() {
             load_settings,
             save_settings,
             check_for_updates,
+            download_and_install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

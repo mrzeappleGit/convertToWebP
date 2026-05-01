@@ -12,7 +12,7 @@ import { THEMES, applyTheme } from "./themes";
 import { useSettings } from "./useSettings";
 import { invoke } from "./invoke";
 
-const VERSION = "1.12.0";
+const VERSION = "2.0.0";
 
 const TABS = [
   { id: "converter", label: "Converter", icon: "🖼" },
@@ -65,6 +65,20 @@ function App() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateChecked, setUpdateChecked] = useState(false);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState("");
+
+  // Listen for update progress events
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    (async () => {
+      if (window.__TAURI_INTERNALS__) {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen<string>("update-progress", (e) => setUpdateProgress(e.payload));
+      }
+    })();
+    return () => { unlisten?.(); };
+  }, []);
 
   // Apply theme from settings
   useEffect(() => { applyTheme(settings.theme); }, [settings.theme]);
@@ -293,9 +307,22 @@ function App() {
                         {updateInfo!.releaseNotes.slice(0, 300)}
                       </div>
                     )}
-                    <button className="wwk-btn primary sm" onClick={() => openUrl(updateInfo!.downloadUrl)}>
-                      ⬇ Download Update
-                    </button>
+                    {updateInstalling ? (
+                      <div className="dim" style={{ fontSize: 12 }}>{updateProgress || "Starting update..."}</div>
+                    ) : (
+                      <button className="wwk-btn primary sm" onClick={async () => {
+                        setUpdateInstalling(true);
+                        setUpdateProgress("Starting download...");
+                        try {
+                          await invoke("download_and_install_update", { url: updateInfo!.downloadUrl });
+                        } catch (e: any) {
+                          setUpdateProgress(`Error: ${e}`);
+                          setUpdateInstalling(false);
+                        }
+                      }}>
+                        ⬇ Install Update
+                      </button>
+                    )}
                   </div>
                 ) : updateChecked ? (
                   <div className="row between center">
