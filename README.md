@@ -3,13 +3,21 @@
 A desktop toolkit for designers and developers — convert images, batch-rename files, slice PDFs, transcode video, format text, crop images, and trace SVG image maps. Built with Tauri, React, and Rust.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Binary Size](https://img.shields.io/badge/binary-22MB-green)
 ![Tests](https://img.shields.io/badge/tests-91%20passing-brightgreen)
 
 ## Download
 
-Grab the latest `WebWeaverKit.exe` from [Releases](https://github.com/mrzeappleGit/convertToWebP/releases). Single portable executable — no installer needed.
+Grab the latest release from [Releases](https://github.com/mrzeappleGit/convertToWebP/releases):
+
+| Platform | Format |
+|---|---|
+| **Windows** | `.exe` (portable) or `.msi` (installer) |
+| **macOS** | `.dmg` |
+| **Linux** | `.AppImage`, `.deb`, or `.rpm` |
+
+Linux packages declare `ffmpeg` as a dependency. On macOS, install FFmpeg via `brew install ffmpeg`.
 
 ## Tools
 

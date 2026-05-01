@@ -401,12 +401,11 @@ async fn convert_video(app: tauri::AppHandle, args: VideoConvertArgs) -> Result<
 
     cmd_args.extend(["-y".into(), output.to_string_lossy().to_string()]);
 
-    let mut child = Command::new(&ffmpeg)
-        .args(&cmd_args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW on Windows
-        .spawn()
+    let mut cmd = Command::new(&ffmpeg);
+    cmd.args(&cmd_args).stdout(Stdio::piped()).stderr(Stdio::piped());
+    #[cfg(windows)]
+    { cmd.creation_flags(0x08000000); } // CREATE_NO_WINDOW
+    let mut child = cmd.spawn()
         .map_err(|e| format!("Failed to start FFmpeg: {}", e))?;
 
     // Stream FFmpeg stderr to frontend
@@ -431,25 +430,27 @@ async fn convert_video(app: tauri::AppHandle, args: VideoConvertArgs) -> Result<
 }
 
 fn find_ffmpeg(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let ffmpeg_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+
     // Check bundled resource first
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let bundled = resource_dir.join("resources").join("ffmpeg.exe");
+        let bundled = resource_dir.join("resources").join(ffmpeg_name);
         if bundled.exists() { return Ok(bundled); }
-        let bundled2 = resource_dir.join("ffmpeg.exe");
+        let bundled2 = resource_dir.join(ffmpeg_name);
         if bundled2.exists() { return Ok(bundled2); }
     }
     // Check alongside exe
-    if let Ok(exe_dir) = std::env::current_exe() {
-        if let Some(dir) = exe_dir.parent() {
-            let local = dir.join("ffmpeg.exe");
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            let local = dir.join(ffmpeg_name);
             if local.exists() { return Ok(local); }
         }
     }
-    // Fall back to PATH
-    if Command::new("ffmpeg").arg("-version").output().is_ok() {
+    // Fall back to PATH (ffmpeg is commonly installed on Linux/macOS)
+    if Command::new("ffmpeg").arg("-version").stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok() {
         return Ok(PathBuf::from("ffmpeg"));
     }
-    Err("FFmpeg not found. Place ffmpeg.exe next to the application or install it to PATH.".into())
+    Err("FFmpeg not found. Install ffmpeg to your PATH or place it next to the application.".into())
 }
 
 // ── PDF helpers ──────────────────────────────────────────────────
@@ -640,48 +641,53 @@ async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Resu
 
     app.emit("update-progress", "Installing update...").ok();
 
-    // Write helper batch script to replace exe and restart
-    let bat_content = format!(
-        "@echo off\r\n\
-        timeout /t 2 /nobreak > NUL\r\n\
-        taskkill /IM \"{}\" /F > NUL 2>&1\r\n\
-        set retries=0\r\n\
-        :retry\r\n\
-        move /Y \"{}\" \"{}\" > NUL 2>&1\r\n\
-        if %errorlevel% EQU 0 goto success\r\n\
-        set /a retries+=1\r\n\
-        if %retries% GEQ 10 goto fail\r\n\
-        timeout /t 1 /nobreak > NUL\r\n\
-        goto retry\r\n\
-        :success\r\n\
-        timeout /t 1 /nobreak > NUL\r\n\
-        start \"\" \"{}\"\r\n\
-        goto cleanup\r\n\
-        :fail\r\n\
-        del \"{}\" > NUL 2>&1\r\n\
-        :cleanup\r\n\
-        (goto) 2>nul & del \"%~f0\"\r\n",
-        exe_name,
-        download_path.to_string_lossy(),
-        current_exe.to_string_lossy(),
-        current_exe.to_string_lossy(),
-        download_path.to_string_lossy(),
-    );
-
-    fs::write(&helper_bat, &bat_content).map_err(|e| format!("Cannot write helper: {}", e))?;
-
-    // Launch helper and exit
+    // Platform-specific: write a helper script to replace the binary and restart
     #[cfg(windows)]
     {
-        let flags = 0x08000000 | 0x00000008 | 0x00000200; // CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        let helper_path = exe_dir.join("update_helper.bat");
+        let script = format!(
+            "@echo off\r\ntimeout /t 2 /nobreak > NUL\r\n\
+            taskkill /IM \"{}\" /F > NUL 2>&1\r\n\
+            set retries=0\r\n:retry\r\n\
+            move /Y \"{}\" \"{}\" > NUL 2>&1\r\n\
+            if %errorlevel% EQU 0 goto success\r\n\
+            set /a retries+=1\r\nif %retries% GEQ 10 goto fail\r\n\
+            timeout /t 1 /nobreak > NUL\r\ngoto retry\r\n\
+            :success\r\ntimeout /t 1 /nobreak > NUL\r\nstart \"\" \"{}\"\r\ngoto cleanup\r\n\
+            :fail\r\ndel \"{}\" > NUL 2>&1\r\n\
+            :cleanup\r\n(goto) 2>nul & del \"%~f0\"\r\n",
+            exe_name, download_path.to_string_lossy(), current_exe.to_string_lossy(),
+            current_exe.to_string_lossy(), download_path.to_string_lossy(),
+        );
+        fs::write(&helper_path, &script).map_err(|e| format!("Cannot write helper: {}", e))?;
+        let flags = 0x08000000 | 0x00000008 | 0x00000200;
         Command::new("cmd.exe")
-            .args(["/c", &helper_bat.to_string_lossy()])
+            .args(["/c", &helper_path.to_string_lossy()])
             .creation_flags(flags)
             .spawn()
             .map_err(|e| format!("Cannot launch helper: {}", e))?;
     }
 
-    // Exit the app so the helper can replace the exe
+    #[cfg(not(windows))]
+    {
+        let helper_path = exe_dir.join("update_helper.sh");
+        let script = format!(
+            "#!/bin/sh\nsleep 2\ncp -f '{}' '{}'\nchmod +x '{}'\n'{}' &\nrm -f '$0'\n",
+            download_path.to_string_lossy(), current_exe.to_string_lossy(),
+            current_exe.to_string_lossy(), current_exe.to_string_lossy(),
+        );
+        fs::write(&helper_path, &script).map_err(|e| format!("Cannot write helper: {}", e))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&helper_path, fs::Permissions::from_mode(0o755)).ok();
+        }
+        Command::new("sh")
+            .arg(&helper_path)
+            .spawn()
+            .map_err(|e| format!("Cannot launch helper: {}", e))?;
+    }
+
     app.exit(0);
     Ok(())
 }

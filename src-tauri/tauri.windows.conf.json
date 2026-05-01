@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "resources": {
+      "../resources/ffmpeg.exe": "resources/ffmpeg.exe",
+      "../resources/cjpegli.exe": "resources/cjpegli.exe"
+    }
+  }
+}
