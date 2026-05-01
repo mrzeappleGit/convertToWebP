@@ -72,17 +72,7 @@ jobs:
             libsoup-3.0-dev \
             javascriptcoregtk-4.1-dev
 
-      # macOS: download static FFmpeg binary to bundle in the .app
-      - name: Bundle FFmpeg for macOS
-        if: matrix.platform == 'macos-latest'
-        run: |
-          mkdir -p resources
-          curl -L "https://evermeet.cx/ffmpeg/getrelease/zip" -o ffmpeg.zip
-          unzip ffmpeg.zip -d resources/
-          chmod +x resources/ffmpeg
-          ls -lh resources/ffmpeg
-
-      # macOS: import signing certificate into keychain
+      # macOS: import signing certificate into keychain (must happen before codesigning ffmpeg)
       - name: Import Apple signing certificate
         if: matrix.platform == 'macos-latest'
         env:
@@ -92,12 +82,10 @@ jobs:
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
 
-          # Create temporary keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # Import certificate
           echo $APPLE_CERTIFICATE | base64 --decode > $RUNNER_TEMP/certificate.p12
           security import $RUNNER_TEMP/certificate.p12 \
             -k $KEYCHAIN_PATH \
@@ -108,11 +96,20 @@ jobs:
             -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # Add to search list
           security list-keychain -d user -s $KEYCHAIN_PATH
-
-          # Verify
           security find-identity -v $KEYCHAIN_PATH
+
+      # macOS: download FFmpeg and codesign it with hardened runtime for notarization
+      - name: Bundle and sign FFmpeg for macOS
+        if: matrix.platform == 'macos-latest'
+        run: |
+          mkdir -p resources
+          curl -L "https://evermeet.cx/ffmpeg/getrelease/zip" -o ffmpeg.zip
+          unzip ffmpeg.zip -d resources/
+          chmod +x resources/ffmpeg
+          codesign --force --options runtime --sign "${{ secrets.APPLE_SIGNING_IDENTITY }}" --timestamp resources/ffmpeg
+          codesign -vvv resources/ffmpeg
+          echo "FFmpeg signed successfully"
 
       - run: npm ci
 
