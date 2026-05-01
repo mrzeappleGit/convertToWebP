@@ -14,6 +14,7 @@ from theme import (
     FONT_FAMILY, DISPLAY_SM, TITLE_LG, TITLE_MD, TITLE_SM, BODY, BODY_SM, LABEL_SM, LABEL_SM_MONO,
     SP_1, SP_2, SP_4, SP_6, SP_8, SP_10,
     apply_atelier_theme, Tooltip, create_section, PillSelector,
+    ScrollableFrame,
 )
 
 
@@ -116,9 +117,12 @@ class SVGCircleGeneratorGUI(ttk.Frame):
         self.instruction_label.pack(fill="x", padx=SP_4, pady=(0, SP_4))
 
         # ── Right side: controls panel (~40%) ──────────────────────
-        right_frame = tk.Frame(main_pane, bg=SURFACE_CONTAINER, width=320)
-        right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, SP_4), pady=SP_4)
-        right_frame.pack_propagate(False)
+        right_outer = tk.Frame(main_pane, bg=SURFACE_CONTAINER, width=320)
+        right_outer.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, SP_4), pady=SP_4)
+        right_outer.pack_propagate(False)
+        self._right_scroll = ScrollableFrame(right_outer, bg=SURFACE_CONTAINER)
+        self._right_scroll.pack(fill="both", expand=True)
+        right_frame = self._right_scroll.interior
 
         # ── Section: SHAPE ─────────────────────────────────────────
         shape_wrap, shape_body = create_section(right_frame, "SHAPE")
@@ -199,7 +203,7 @@ class SVGCircleGeneratorGUI(ttk.Frame):
 
         # ── Button row ─────────────────────────────────────────────
         btn_row = tk.Frame(right_frame, bg=SURFACE_CONTAINER)
-        btn_row.pack(fill=tk.X, pady=(0, SP_2))
+        btn_row.pack(side="bottom", fill=tk.X, pady=(0, SP_2))
 
         self.clear_button = ttk.Button(btn_row, text="Clear Shape", command=self.clear_shapes, state=tk.DISABLED)
         self.clear_button.pack(side=tk.LEFT, padx=(0, SP_2))
@@ -209,6 +213,7 @@ class SVGCircleGeneratorGUI(ttk.Frame):
         ttk.Button(btn_row, text="Export SVG", command=self._export_svg, style="Primary.TButton").pack(side=tk.RIGHT)
 
         self._update_mode()
+        self._right_scroll.bind_scroll()
 
     # ── Mode / UI ─────────────────────────────────────────────────
 

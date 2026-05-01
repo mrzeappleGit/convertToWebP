@@ -16,6 +16,7 @@ from theme import (
     FONT_FAMILY, DISPLAY_SM, TITLE_LG, TITLE_MD, TITLE_SM, BODY, BODY_SM, LABEL_SM, LABEL_SM_MONO,
     SP_1, SP_2, SP_4, SP_6, SP_8, SP_10,
     apply_atelier_theme, Tooltip, create_section, PillSelector, StatusDot,
+    ScrollableFrame,
 )
 
 
@@ -58,8 +59,11 @@ class VideoConverterGUI(ttk.Frame):
         # ════════════════════════════════════════════════════════════
         # LEFT PANEL -- controls
         # ════════════════════════════════════════════════════════════
-        left = tk.Frame(self, bg=SURFACE_CONTAINER)
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, SP_4))
+        left_outer = tk.Frame(self, bg=SURFACE_CONTAINER)
+        left_outer.grid(row=0, column=0, sticky="nsew", padx=(0, SP_4))
+        self._left_scroll = ScrollableFrame(left_outer, bg=SURFACE_CONTAINER)
+        self._left_scroll.pack(fill="both", expand=True)
+        left = self._left_scroll.interior
 
         # ── Source ─────────────────────────────────────────────────
         src_wrap, src = create_section(left, "SOURCE")
@@ -176,9 +180,14 @@ class VideoConverterGUI(ttk.Frame):
         )
         self.resolution_pills.pack(anchor="w")
 
-        # ── Convert button + progress ──────────────────────────────
+        # ── Convert button + progress (pack from bottom for visibility)
+        self.video_progress = ttk.Progressbar(
+            left, orient="horizontal", mode="determinate", value=0,
+        )
+        self.video_progress.pack(side="bottom", fill="x")
+
         action = tk.Frame(left, bg=SURFACE_CONTAINER)
-        action.pack(fill="x", pady=(0, SP_2))
+        action.pack(side="bottom", fill="x", pady=(0, SP_2))
 
         ttk.Button(
             action, text="\u25B6  Convert", command=self.convert_video,
@@ -190,11 +199,6 @@ class VideoConverterGUI(ttk.Frame):
             bg=SURFACE_CONTAINER,
         )
         self.estimated_time_label.pack(side="right")
-
-        self.video_progress = ttk.Progressbar(
-            left, orient="horizontal", mode="determinate", value=0,
-        )
-        self.video_progress.pack(fill="x")
 
         # ════════════════════════════════════════════════════════════
         # RIGHT PANEL -- ffmpeg log
@@ -227,6 +231,7 @@ class VideoConverterGUI(ttk.Frame):
 
         # ── Apply initial format defaults ──────────────────────────
         self._on_format_change("mp4")
+        self._left_scroll.bind_scroll()
 
     # ================================================================
     # Helpers

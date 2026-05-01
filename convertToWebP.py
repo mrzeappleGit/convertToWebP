@@ -56,7 +56,7 @@ from svgCircleGenerator import SVGCircleGeneratorGUI
 
 GITHUB_REPO = "mrzeappleGit/convertToWebP"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-currentVersion = "1.11.0"
+currentVersion = "1.12.0"
 
 headers = {
     'User-Agent': f'WebWeaverKit/{currentVersion}',
@@ -246,7 +246,7 @@ class MainApp(tk.Tk):
             pass
 
         self.resizable(True, True)
-        self.minsize(960, 640)
+        self.minsize(800, 500)
         self.configure(bg=SURFACE)
 
         self.update_idletasks()

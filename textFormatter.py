@@ -11,6 +11,7 @@ from theme import (
     FONT_FAMILY, DISPLAY_SM, TITLE_LG, TITLE_MD, TITLE_SM, BODY, BODY_SM, LABEL_SM, LABEL_SM_MONO,
     SP_1, SP_2, SP_4, SP_6, SP_8, SP_10,
     apply_atelier_theme, Tooltip, create_section, PillSelector,
+    ScrollableFrame,
 )
 
 
@@ -34,8 +35,11 @@ class TextFormatterGUI(ttk.Frame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        card = tk.Frame(self, bg=SURFACE_CONTAINER)
-        card.grid(row=0, column=0, sticky="n")
+        card_outer = tk.Frame(self, bg=SURFACE_CONTAINER)
+        card_outer.grid(row=0, column=0, sticky="nsew")
+        self._scroll = ScrollableFrame(card_outer, bg=SURFACE_CONTAINER)
+        self._scroll.pack(fill="both", expand=True)
+        card = self._scroll.interior
 
         # ── Input section ─────────────────────────────────────────
         in_wrap, inp = create_section(card, "INPUT")
@@ -87,7 +91,7 @@ class TextFormatterGUI(ttk.Frame):
 
         # ── Bottom row: Copy button + counts ──────────────────────
         bottom = tk.Frame(card, bg=SURFACE_CONTAINER)
-        bottom.pack(fill="x")
+        bottom.pack(side="bottom", fill="x")
 
         ttk.Button(bottom, text="Copy", command=self.copy_to_clipboard).pack(side="left")
 
@@ -96,6 +100,8 @@ class TextFormatterGUI(ttk.Frame):
             font=LABEL_SM_MONO, fg=ON_SURFACE_VARIANT, bg=SURFACE_CONTAINER,
         )
         self.count_label.pack(side="right")
+
+        self._scroll.bind_scroll()
 
     # ── Placeholder handling ──────────────────────────────────────
 

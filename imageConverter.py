@@ -22,6 +22,7 @@ from theme import (
     FONT_FAMILY, DISPLAY_SM, TITLE_LG, TITLE_MD, TITLE_SM, BODY, BODY_SM, LABEL_SM, LABEL_SM_MONO,
     SP_1, SP_2, SP_4, SP_6, SP_8, SP_10,
     apply_atelier_theme, Tooltip, create_section, PillSelector, StatusDot,
+    ScrollableFrame,
 )
 
 
@@ -103,8 +104,11 @@ class ImageConverterGUI(ttk.Frame):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        left_panel = tk.Frame(self, bg=SURFACE_CONTAINER)
-        left_panel.grid(row=0, column=0, sticky="nsew", padx=(0, SP_4))
+        left_outer = tk.Frame(self, bg=SURFACE_CONTAINER)
+        left_outer.grid(row=0, column=0, sticky="nsew", padx=(0, SP_4))
+        self._left_scroll = ScrollableFrame(left_outer, bg=SURFACE_CONTAINER)
+        self._left_scroll.pack(fill="both", expand=True)
+        left_panel = self._left_scroll.interior
 
         right_panel = tk.Frame(self, bg=SURFACE_CONTAINER)
         right_panel.grid(row=0, column=1, sticky="nsew")
@@ -187,9 +191,9 @@ class ImageConverterGUI(ttk.Frame):
         self.resize_label = tk.Label(r_row, text="100%", width=5, font=LABEL_SM, fg=ON_SURFACE_VARIANT, bg=SURFACE_CONTAINER_LOW)
         self.resize_label.pack(side="left", padx=(SP_2, 0))
 
-        # ── Action area ──────────────────────────────────────────
+        # ── Action area (pack from bottom so it's always visible) ─
         act_wrap, act = create_section(left_panel, "ACTION")
-        act_wrap.pack(fill="x", pady=(0, SP_8))
+        act_wrap.pack(side="bottom", fill="x")
 
         act_top = tk.Frame(act, bg=SURFACE_CONTAINER_LOW)
         act_top.pack(fill="x", pady=(0, SP_2))
@@ -283,6 +287,7 @@ class ImageConverterGUI(ttk.Frame):
         self.toggle_compress()
         self.toggle_resize_slider()
         self.process_preview_queue()
+        self._left_scroll.bind_scroll()
 
     # ── Queue canvas helpers ──────────────────────────────────────
 

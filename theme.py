@@ -564,3 +564,59 @@ class Tooltip:
         if self._tip:
             self._tip.destroy()
             self._tip = None
+
+
+class ScrollableFrame(tk.Frame):
+    """A frame with an automatic vertical scrollbar when content overflows."""
+
+    def __init__(self, parent, bg=SURFACE_CONTAINER, **kwargs):
+        super().__init__(parent, bg=bg, **kwargs)
+
+        self._canvas = tk.Canvas(self, bg=bg, highlightthickness=0, borderwidth=0)
+        self._scrollbar = ttk.Scrollbar(self, orient="vertical", command=self._canvas.yview)
+        self.interior = tk.Frame(self._canvas, bg=bg)
+
+        self._canvas_window = self._canvas.create_window(
+            (0, 0), window=self.interior, anchor="nw")
+        self._canvas.configure(yscrollcommand=self._scrollbar.set)
+
+        self._canvas.pack(side="left", fill="both", expand=True)
+
+        self.interior.bind("<Configure>", self._on_interior_configure)
+        self._canvas.bind("<Configure>", self._on_canvas_configure)
+
+    def _on_interior_configure(self, event):
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        self._update_scrollbar()
+
+    def _on_canvas_configure(self, event):
+        self._canvas.itemconfig(self._canvas_window, width=event.width)
+        self._update_scrollbar()
+
+    def _update_scrollbar(self):
+        self._canvas.update_idletasks()
+        bbox = self._canvas.bbox("all")
+        interior_h = (bbox[3] - bbox[1]) if bbox else 0
+        canvas_h = self._canvas.winfo_height()
+        if interior_h > canvas_h > 1:
+            if not self._scrollbar.winfo_ismapped():
+                self._scrollbar.pack(side="right", fill="y")
+        else:
+            if self._scrollbar.winfo_ismapped():
+                self._scrollbar.pack_forget()
+                self._canvas.yview_moveto(0)
+
+    def _on_mousewheel(self, event):
+        if self.interior.winfo_reqheight() > self._canvas.winfo_height():
+            self._canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def bind_scroll(self):
+        """Bind mousewheel scrolling to the canvas and all interior children."""
+        self._canvas.bind("<MouseWheel>", self._on_mousewheel)
+        self._bind_recursive(self.interior)
+
+    def _bind_recursive(self, widget):
+        if not widget.bind("<MouseWheel>"):
+            widget.bind("<MouseWheel>", self._on_mousewheel)
+        for child in widget.winfo_children():
+            self._bind_recursive(child)

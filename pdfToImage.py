@@ -15,6 +15,7 @@ from theme import (
     FONT_FAMILY, DISPLAY_SM, TITLE_LG, TITLE_MD, TITLE_SM, BODY, BODY_SM, LABEL_SM, LABEL_SM_MONO,
     SP_1, SP_2, SP_4, SP_6, SP_8, SP_10,
     apply_atelier_theme, Tooltip, create_section, PillSelector,
+    ScrollableFrame,
 )
 
 
@@ -33,8 +34,11 @@ class pdfToImageGUI(ttk.Frame):
         self.grid_rowconfigure(0, weight=1)
 
         # ── Left Panel ──────────────────────────────────────────────
-        left = tk.Frame(self, bg=SURFACE_CONTAINER)
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, SP_4))
+        left_outer = tk.Frame(self, bg=SURFACE_CONTAINER)
+        left_outer.grid(row=0, column=0, sticky="nsew", padx=(0, SP_4))
+        self._left_scroll = ScrollableFrame(left_outer, bg=SURFACE_CONTAINER)
+        self._left_scroll.pack(fill="both", expand=True)
+        left = self._left_scroll.interior
 
         # ── PDF Source ──────────────────────────────────────────────
         src_wrap, src = create_section(left, "PDF SOURCE")
@@ -96,18 +100,18 @@ class pdfToImageGUI(ttk.Frame):
             command=self.update_preview,
         ).pack(anchor="w", pady=SP_1)
 
-        # ── Action ──────────────────────────────────────────────────
-        ttk.Button(
-            left, text="\u2B07  Convert PDF", command=self.convert_pdf_to_image,
-            style="Primary.TButton",
-        ).pack(anchor="w")
-
-        # ── Output Path ─────────────────────────────────────────────
+        # ── Output Path (pack from bottom first) ────────────────────
         self.output_path_label = tk.Label(
             left, text="", font=LABEL_SM_MONO, fg=ON_SURFACE_VARIANT,
             bg=SURFACE_CONTAINER, anchor="w", wraplength=360, justify="left",
         )
-        self.output_path_label.pack(anchor="w", fill="x", pady=(SP_4, 0))
+        self.output_path_label.pack(side="bottom", fill="x", pady=(SP_4, 0))
+
+        # ── Action (pack from bottom, above output path) ────────────
+        ttk.Button(
+            left, text="\u2B07  Convert PDF", command=self.convert_pdf_to_image,
+            style="Primary.TButton",
+        ).pack(side="bottom", anchor="w")
 
         # ── Right Panel / Preview ───────────────────────────────────
         right = tk.Frame(self, bg=SURFACE_CONTAINER)
@@ -131,6 +135,8 @@ class pdfToImageGUI(ttk.Frame):
             anchor="center", justify="center",
         )
         self.preview_label.grid(row=1, column=0, sticky="nsew")
+
+        self._left_scroll.bind_scroll()
 
     # ── Format / Quality callbacks ──────────────────────────────────
 

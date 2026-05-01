@@ -13,6 +13,7 @@ from theme import (
     FONT_FAMILY, DISPLAY_SM, TITLE_LG, TITLE_MD, TITLE_SM, BODY, BODY_SM, LABEL_SM, LABEL_SM_MONO,
     SP_1, SP_2, SP_4, SP_6, SP_8, SP_10,
     apply_atelier_theme, Tooltip, create_section, PillSelector, StatusDot,
+    ScrollableFrame,
 )
 
 
@@ -34,8 +35,11 @@ class FileRenamerGUI(ttk.Frame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        card = tk.Frame(self, bg=SURFACE_CONTAINER)
-        card.grid(row=0, column=0, sticky="nsew")
+        card_outer = tk.Frame(self, bg=SURFACE_CONTAINER)
+        card_outer.grid(row=0, column=0, sticky="nsew")
+        self._scroll = ScrollableFrame(card_outer, bg=SURFACE_CONTAINER)
+        self._scroll.pack(fill="both", expand=True)
+        card = self._scroll.interior
 
         # ── Rename Options section ──────────────────────────────────
         opt_wrap, opt = create_section(card, "RENAME OPTIONS")
@@ -98,43 +102,9 @@ class FileRenamerGUI(ttk.Frame):
         ttk.Button(card, text="Preview", command=self._refresh_preview, style="TButton").pack(
             anchor="w", pady=(0, SP_8))
 
-        # ── Preview section ─────────────────────────────────────────
-        prev_wrap, prev = create_section(card, "PREVIEW")
-        prev_wrap.pack(fill="both", expand=True, pady=(0, SP_8))
-        prev.grid_rowconfigure(0, weight=1)
-        prev.grid_columnconfigure(0, weight=1)
-
-        # Scrollable preview area
-        self._preview_canvas = tk.Canvas(prev, bg=SURFACE_CONTAINER_LOW, highlightthickness=0,
-                                          height=200)
-        self._preview_scrollbar = ttk.Scrollbar(prev, orient="vertical",
-                                                  command=self._preview_canvas.yview)
-        self._preview_inner = tk.Frame(self._preview_canvas, bg=SURFACE_CONTAINER_LOW)
-
-        self._preview_inner.bind("<Configure>",
-                                  lambda e: self._preview_canvas.configure(
-                                      scrollregion=self._preview_canvas.bbox("all")))
-        self._preview_canvas_window = self._preview_canvas.create_window(
-            (0, 0), window=self._preview_inner, anchor="nw")
-        self._preview_canvas.configure(yscrollcommand=self._preview_scrollbar.set)
-
-        self._preview_canvas.grid(row=0, column=0, sticky="nsew")
-        self._preview_scrollbar.grid(row=0, column=1, sticky="ns")
-
-        # Make the inner frame expand to canvas width
-        self._preview_canvas.bind("<Configure>", self._on_canvas_configure)
-
-        # Mouse wheel scrolling
-        self._preview_canvas.bind("<MouseWheel>", self._on_mousewheel)
-        self._preview_inner.bind("<MouseWheel>", self._on_mousewheel)
-
-        # ── Rename button (primary CTA) ─────────────────────────────
-        ttk.Button(card, text="\u270F  Rename Files", command=self.rename_files,
-                   style="Primary.TButton").pack(anchor="w", pady=(0, SP_8))
-
-        # ── Status bar ──────────────────────────────────────────────
+        # ── Status bar (pack from bottom so it's always visible) ────
         status_frame = tk.Frame(card, bg=SURFACE_CONTAINER_LOW, padx=SP_4, pady=SP_2)
-        status_frame.pack(fill="x")
+        status_frame.pack(side="bottom", fill="x")
 
         # Ready count
         self._dot_ready = StatusDot(status_frame, color=PRIMARY)
@@ -156,6 +126,42 @@ class FileRenamerGUI(ttk.Frame):
         self._lbl_error = tk.Label(status_frame, text="Errors: 0", font=LABEL_SM,
                                     fg=ON_SURFACE_VARIANT, bg=SURFACE_CONTAINER_LOW)
         self._lbl_error.pack(side="left")
+
+        # ── Rename button (pack from bottom, above status) ──────────
+        ttk.Button(card, text="\u270F  Rename Files", command=self.rename_files,
+                   style="Primary.TButton").pack(side="bottom", anchor="w", pady=(0, SP_8))
+
+        # ── Preview section (fills remaining space) ─────────────────
+        prev_wrap, prev = create_section(card, "PREVIEW")
+        prev_wrap.pack(fill="both", expand=True, pady=(0, SP_8))
+        prev.pack_configure(fill="both", expand=True)
+        prev.grid_rowconfigure(0, weight=1)
+        prev.grid_columnconfigure(0, weight=1)
+
+        # Scrollable preview area
+        self._preview_canvas = tk.Canvas(prev, bg=SURFACE_CONTAINER_LOW, highlightthickness=0)
+        self._preview_scrollbar = ttk.Scrollbar(prev, orient="vertical",
+                                                  command=self._preview_canvas.yview)
+        self._preview_inner = tk.Frame(self._preview_canvas, bg=SURFACE_CONTAINER_LOW)
+
+        self._preview_inner.bind("<Configure>",
+                                  lambda e: self._preview_canvas.configure(
+                                      scrollregion=self._preview_canvas.bbox("all")))
+        self._preview_canvas_window = self._preview_canvas.create_window(
+            (0, 0), window=self._preview_inner, anchor="nw")
+        self._preview_canvas.configure(yscrollcommand=self._preview_scrollbar.set)
+
+        self._preview_canvas.grid(row=0, column=0, sticky="nsew")
+        self._preview_scrollbar.grid(row=0, column=1, sticky="ns")
+
+        # Make the inner frame expand to canvas width
+        self._preview_canvas.bind("<Configure>", self._on_canvas_configure)
+
+        # Mouse wheel scrolling
+        self._preview_canvas.bind("<MouseWheel>", self._on_mousewheel)
+        self._preview_inner.bind("<MouseWheel>", self._on_mousewheel)
+
+        self._scroll.bind_scroll()
 
     # ── Callbacks ───────────────────────────────────────────────────
 
