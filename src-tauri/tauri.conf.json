@@ -29,8 +29,8 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "../../resources/ffmpeg.exe": "resources/ffmpeg.exe",
-      "../../resources/cjpegli.exe": "resources/cjpegli.exe"
+      "../resources/ffmpeg.exe": "resources/ffmpeg.exe",
+      "../resources/cjpegli.exe": "resources/cjpegli.exe"
     },
     "icon": [
       "icons/32x32.png",
