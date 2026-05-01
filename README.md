@@ -17,7 +17,7 @@ Grab the latest release from [Releases](https://github.com/mrzeappleGit/convertT
 | **macOS** | `.dmg` |
 | **Linux** | `.AppImage`, `.deb`, or `.rpm` |
 
-Linux packages declare `ffmpeg` as a dependency. On macOS, install FFmpeg via `brew install ffmpeg`.
+Windows and macOS builds bundle FFmpeg. Linux packages declare `ffmpeg` as a system dependency.
 
 ## Tools
 
