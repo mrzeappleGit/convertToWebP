@@ -40,9 +40,7 @@ jobs:
         with:
           workspaces: tauri-app/src-tauri -> target
       - run: npm ci
-      - run: npx tauri build
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ""
+      - run: npm run tauri build
       - uses: actions/upload-artifact@v4
         with:
           name: WebWeaverKit-windows
