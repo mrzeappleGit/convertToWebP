@@ -29,9 +29,7 @@ jobs:
         include:
           - platform: windows-latest
             artifact: WebWeaverKit-windows
-            bundle-path: |
-              src-tauri/target/release/bundle/nsis/*.exe
-              src-tauri/target/release/bundle/msi/*.msi
+            bundle-path: src-tauri/target/release/WebWeaverKit.exe
           - platform: ubuntu-22.04
             artifact: WebWeaverKit-linux
             bundle-path: |
@@ -123,9 +121,16 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      # Build on other platforms (no signing)
-      - name: Build
-        if: matrix.platform != 'macos-latest'
+      # Build on Windows (standalone exe, no installer)
+      - name: Build (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: |
+          npm run tauri build -- --no-bundle
+          mv src-tauri/target/release/app.exe src-tauri/target/release/WebWeaverKit.exe
+
+      # Build on Linux
+      - name: Build (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
         run: npm run tauri build
 
       - uses: actions/upload-artifact@v4
