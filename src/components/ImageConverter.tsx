@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Section } from "./Section";
 import { PillSelector } from "./PillSelector";
 import { invoke } from "../invoke";
@@ -15,6 +15,18 @@ function Check({ checked, onChange, label, sub }: { checked: boolean; onChange: 
   );
 }
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+interface QueueFile {
+  name: string;
+  size: number;
+  status: "pending" | "processing" | "done";
+}
+
 export function ImageConverter() {
   const [sourcePath, setSourcePath] = useState("");
   const [destPath, setDestPath] = useState("");
@@ -28,6 +40,7 @@ export function ImageConverter() {
   const [progress, setProgress] = useState(0);
   const [running, setRunning] = useState(false);
   const [stats, setStats] = useState("");
+  const [queueFiles, setQueueFiles] = useState<QueueFile[]>([]);
 
   const browse = async (type: "file" | "folder", setter: (v: string) => void) => {
     const cmd = type === "folder" ? "pick_folder" : "pick_file";
@@ -38,19 +51,41 @@ export function ImageConverter() {
     if (path) setter(path);
   };
 
+  useEffect(() => {
+    if (!sourcePath) { setQueueFiles([]); return; }
+    invoke<{ name: string; size: number; path: string }[]>("list_source_files", { sourcePath })
+      .then(files => setQueueFiles(files.map(f => ({ name: f.name, size: f.size, status: "pending" as const }))))
+      .catch(() => setQueueFiles([]));
+  }, [sourcePath]);
+
   const handleRun = async () => {
     if (!sourcePath || !destPath) return;
     setRunning(true); setProgress(0); setStats("");
+    setQueueFiles(prev => prev.map(f => ({ ...f, status: "pending" as const })));
+
+    let unlisten: (() => void) | undefined;
     try {
+      if (window.__TAURI_INTERNALS__) {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen<{ current: number; total: number; file: string }>("convert-progress", (event) => {
+          const { current, total } = event.payload;
+          setProgress(Math.round(((current - 1) / total) * 100));
+          setQueueFiles(prev => prev.map((f, i) => ({
+            ...f,
+            status: i < current - 1 ? "done" : i === current - 1 ? "processing" : "pending",
+          })));
+        });
+      }
       const r = await invoke<{ files_processed: number; total_files: number; input_size_bytes: number; output_size_bytes: number }>(
         "convert_images", { args: { sourcePath, destPath, format: format.toLowerCase(), quality, convert, compress, rename, resize, resizePercent } }
       );
       setProgress(100);
+      setQueueFiles(prev => prev.map(f => ({ ...f, status: "done" as const })));
       const saved = r.input_size_bytes > 0 ? ((1 - r.output_size_bytes / r.input_size_bytes) * 100).toFixed(0) : "0";
       const inMb = (r.input_size_bytes / 1048576).toFixed(1);
       setStats(`${r.files_processed} files · saved ${saved}% (${inMb} MB input)`);
     } catch (e: any) { setStats(`Error: ${e}`); }
-    finally { setRunning(false); }
+    finally { unlisten?.(); setRunning(false); }
   };
 
   return (
@@ -134,10 +169,25 @@ export function ImageConverter() {
         <div style={{ flex: 1, minHeight: 0, padding: "11px 22px 22px", display: "flex", flexDirection: "column" }}>
           <div className="row between center" style={{ marginBottom: 12 }}>
             <div className="wwk-section-label"><span>Queue</span></div>
-            <span className="mono dim tnum" style={{ fontSize: 11 }}>No files</span>
+            <span className="mono dim tnum" style={{ fontSize: 11 }}>{queueFiles.length ? `${queueFiles.length} file${queueFiles.length > 1 ? "s" : ""}` : "No files"}</span>
           </div>
-          <div className="wwk-queue" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            Select a source to populate the queue
+          <div className="wwk-queue" style={queueFiles.length ? { overflowY: "auto" } : { display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
+            {queueFiles.length ? queueFiles.map((f, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "3px 8px", fontSize: 12,
+                background: f.status === "processing" ? "var(--surface-hover)" : "transparent",
+                borderRadius: 3,
+              }}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                  background: f.status === "done" ? "var(--primary)" :
+                              f.status === "processing" ? "#e8a32e" : "var(--text-dim)",
+                }} />
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                <span className="mono dim tnum" style={{ fontSize: 10, flexShrink: 0 }}>{formatSize(f.size)}</span>
+              </div>
+            )) : "Select a source to populate the queue"}
           </div>
         </div>
       </div>

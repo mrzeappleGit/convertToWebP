@@ -142,7 +142,7 @@ struct ConvertResult {
 }
 
 #[tauri::command]
-async fn convert_images(args: ConvertImageArgs) -> Result<ConvertResult, String> {
+async fn convert_images(app: tauri::AppHandle, args: ConvertImageArgs) -> Result<ConvertResult, String> {
     let source = Path::new(&args.source_path);
     let dest = PathBuf::from(&args.dest_path);
     fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
@@ -155,7 +155,13 @@ async fn convert_images(args: ConvertImageArgs) -> Result<ConvertResult, String>
 
     let q = if args.compress { args.quality } else { 100 };
 
-    for file_path in &files {
+    for (i, file_path) in files.iter().enumerate() {
+        let fname = file_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        app.emit("convert-progress", serde_json::json!({
+            "current": i + 1,
+            "total": total,
+            "file": fname,
+        })).ok();
         let input_size = fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
         total_input_size += input_size;
 
@@ -186,6 +192,19 @@ async fn convert_images(args: ConvertImageArgs) -> Result<ConvertResult, String>
         input_size_bytes: total_input_size,
         output_size_bytes: total_output_size,
     })
+}
+
+#[tauri::command]
+fn list_source_files(source_path: String) -> Result<Vec<FileInfo>, String> {
+    let files = gather_image_files(Path::new(&source_path))?;
+    Ok(files.iter().map(|p| {
+        let size = fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+        FileInfo {
+            path: p.to_string_lossy().to_string(),
+            name: p.file_name().unwrap_or_default().to_string_lossy().to_string(),
+            size,
+        }
+    }).collect())
 }
 
 fn gather_image_files(path: &Path) -> Result<Vec<PathBuf>, String> {
@@ -228,7 +247,16 @@ fn save_image(img: &image::DynamicImage, path: &Path, format: &str, quality: u8)
         "bmp" => img.save_with_format(path, ImageFormat::Bmp).map_err(|e| e.to_string()),
         "tiff" => img.save_with_format(path, ImageFormat::Tiff).map_err(|e| e.to_string()),
         "ico" => img.save_with_format(path, ImageFormat::Ico).map_err(|e| e.to_string()),
-        "webp" => img.save_with_format(path, ImageFormat::WebP).map_err(|e| e.to_string()),
+        "webp" => {
+            let encoder = webp::Encoder::from_image(img)
+                .map_err(|e| format!("WebP encode error: {}", e))?;
+            let data = if quality >= 100 {
+                encoder.encode_lossless()
+            } else {
+                encoder.encode(quality as f32)
+            };
+            fs::write(path, &*data).map_err(|e| e.to_string())
+        }
         "avif" => img.save_with_format(path, ImageFormat::Avif).map_err(|e| e.to_string()),
         _ => {
             // JPEG and fallback
@@ -516,7 +544,7 @@ fn save_settings(settings: serde_json::Value) -> Result<(), String> {
 // ── Auto-updater (GitHub releases) ───────────────────────────────
 
 const GITHUB_REPO: &str = "mrzeappleGit/convertToWebP";
-const CURRENT_VERSION: &str = "2.0.0";
+const CURRENT_VERSION: &str = "2.0.1";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -719,6 +747,7 @@ pub fn run() {
             write_string_to_file,
             list_files_in_dir,
             convert_images,
+            list_source_files,
             preview_rename,
             execute_rename,
             convert_video,
