@@ -36,6 +36,9 @@ export function ImageConverter() {
   const [rename, setRename] = useState(false);
   const [resize, setResize] = useState(false);
   const [quality, setQuality] = useState(82);
+  const [sizeMode, setSizeMode] = useState<"quality" | "target">("quality");
+  const [targetSize, setTargetSize] = useState("200");
+  const [targetUnit, setTargetUnit] = useState("KB");
   const [resizePercent, setResizePercent] = useState(75);
   const [progress, setProgress] = useState(0);
   const [running, setRunning] = useState(false);
@@ -58,6 +61,10 @@ export function ImageConverter() {
       .catch(() => setQueueFiles([]));
   }, [sourcePath]);
 
+  const targetSizeBytes = compress && sizeMode === "target"
+    ? Math.round((Number(targetSize) || 0) * (targetUnit === "MB" ? 1048576 : 1024))
+    : null;
+
   const handleRun = async () => {
     if (!sourcePath || !destPath) return;
     setRunning(true); setProgress(0); setStats("");
@@ -77,7 +84,7 @@ export function ImageConverter() {
         });
       }
       const r = await invoke<{ files_processed: number; total_files: number; input_size_bytes: number; output_size_bytes: number }>(
-        "convert_images", { args: { sourcePath, destPath, format: format.toLowerCase(), quality, convert, compress, rename, resize, resizePercent } }
+        "convert_images", { args: { sourcePath, destPath, format: format.toLowerCase(), quality, convert, compress, rename, resize, resizePercent, targetSizeBytes } }
       );
       setProgress(100);
       setQueueFiles(prev => prev.map(f => ({ ...f, status: "done" as const })));
@@ -120,11 +127,27 @@ export function ImageConverter() {
             <Check checked={compress} onChange={setCompress} label="Compress" />
             {compress && (
               <div style={{ marginLeft: 25, marginRight: 4 }}>
-                <div className="dim" style={{ fontSize: 11, marginTop: -2 }}>Quality target — higher keeps more detail</div>
-                <div className="wwk-slider-row">
-                  <input type="range" className="wwk-slider" min={0} max={100} value={quality} onChange={e => setQuality(Number(e.target.value))} />
-                  <span className="wwk-slider-val">{quality}%</span>
-                </div>
+                <PillSelector
+                  options={[{ value: "quality", label: "Quality" }, { value: "target", label: "Target size" }]}
+                  value={sizeMode} onChange={v => setSizeMode(v as "quality" | "target")} />
+                {sizeMode === "quality" ? (
+                  <>
+                    <div className="dim" style={{ fontSize: 11, marginTop: 6 }}>Quality target — higher keeps more detail</div>
+                    <div className="wwk-slider-row">
+                      <input type="range" className="wwk-slider" min={0} max={100} value={quality} onChange={e => setQuality(Number(e.target.value))} />
+                      <span className="wwk-slider-val">{quality}%</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="dim" style={{ fontSize: 11, marginTop: 6 }}>Max size per image — quality and resolution adjust automatically</div>
+                    <div className="wwk-field-row" style={{ marginTop: 6 }}>
+                      <input className="wwk-input" type="number" min={1} value={targetSize}
+                        onChange={e => setTargetSize(e.target.value)} placeholder="e.g. 200" style={{ maxWidth: 110 }} />
+                      <PillSelector options={["KB", "MB"]} value={targetUnit} onChange={setTargetUnit} />
+                    </div>
+                  </>
+                )}
               </div>
             )}
             <Check checked={rename} onChange={setRename} label="Rename to slug" sub="kebab-case, ascii-safe" />
@@ -155,7 +178,8 @@ export function ImageConverter() {
           <div className="wwk-progress" style={{ marginBottom: 12 }}>
             <div className="wwk-progress-fill" style={{ width: `${progress}%` }} />
           </div>
-          <button className="wwk-btn primary block lg" onClick={handleRun} disabled={running || !sourcePath || !destPath}>
+          <button className="wwk-btn primary block lg" onClick={handleRun}
+            disabled={running || !sourcePath || !destPath || (targetSizeBytes !== null && targetSizeBytes <= 0)}>
             ▶ {running ? "Converting…" : "Run"}
           </button>
         </div>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#141B2E"/><stop offset="1" stop-color="#05070E"/>
+  </linearGradient>
+  <radialGradient id="haze" cx="0.5" cy="0.46" r="0.62">
+    <stop offset="0" stop-color="#00E5FF" stop-opacity="0.10"/>
+    <stop offset="1" stop-color="#00E5FF" stop-opacity="0"/>
+  </radialGradient>
+</defs>
+<rect width="1024" height="1024" rx="232" fill="url(#bg)"/>
+<rect width="1024" height="1024" rx="232" fill="url(#haze)"/>
+
+<g><line x1="352" y1="232" x2="352" y2="792" stroke="#00E5FF" stroke-width="162" stroke-opacity="0.13" stroke-linecap="butt"/><line x1="512" y1="232" x2="512" y2="792" stroke="#00E5FF" stroke-width="162" stroke-opacity="0.13" stroke-linecap="butt"/><line x1="672" y1="232" x2="672" y2="792" stroke="#00E5FF" stroke-width="162" stroke-opacity="0.13" stroke-linecap="butt"/><line x1="176" y1="512" x2="848" y2="512" stroke="#FF2A93" stroke-width="228" stroke-opacity="0.14" stroke-linecap="butt"/><line x1="352" y1="232" x2="352" y2="412.0" stroke="#00E5FF" stroke-width="92" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="352" y1="612.0" x2="352" y2="792" stroke="#00E5FF" stroke-width="92" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="512" y1="232" x2="512" y2="792" stroke="#00E5FF" stroke-width="92" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="672" y1="232" x2="672" y2="412.0" stroke="#00E5FF" stroke-width="92" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="672" y1="612.0" x2="672" y2="792" stroke="#00E5FF" stroke-width="92" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="176" y1="512" x2="432.0" y2="512" stroke="#FF2A93" stroke-width="132" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="592.0" y1="512" x2="848" y2="512" stroke="#FF2A93" stroke-width="132" stroke-opacity="1.0" stroke-linecap="butt"/></g>
+</svg>

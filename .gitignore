@@ -9,6 +9,9 @@ src-tauri/target/
 *.exe
 *.msi
 
+# Raw branding drop (extracted into branding/)
+/files.zip
+
 # Logs
 *.log
 npm-debug.log*

@@ -5,6 +5,7 @@ import { ImageConverter } from "./components/ImageConverter";
 import { FileRenamer } from "./components/FileRenamer";
 import { PdfToImage } from "./components/PdfToImage";
 import { VideoConverter } from "./components/VideoConverter";
+import { VideoCompressor } from "./components/VideoCompressor";
 import { TextFormatter } from "./components/TextFormatter";
 import { SvgGenerator } from "./components/SvgGenerator";
 import { ImageCropper } from "./components/ImageCropper";
@@ -12,17 +13,33 @@ import { THEMES, applyTheme } from "./themes";
 import { useSettings } from "./useSettings";
 import { invoke } from "./invoke";
 
-const VERSION = "2.0.0";
+const VERSION = "2.1.0";
 
 const TABS = [
   { id: "converter", label: "Converter", icon: "🖼" },
   { id: "renamer", label: "File Renamer", icon: "✏" },
   { id: "pdf", label: "PDF to Image", icon: "📄" },
   { id: "video", label: "Video Converter", icon: "▶" },
+  { id: "vcompress", label: "Video Compressor", icon: "🗜" },
   { id: "text", label: "Text Formatter", icon: "Aa" },
   { id: "crop", label: "Image Crop", icon: "✂" },
   { id: "svg", label: "Image Mapping", icon: "◎" },
 ] as const;
+
+/** The CipherLoom weave mark — three warp threads crossed by the weft. */
+function CipherLoomMark({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="128 184 768 656" aria-hidden="true">
+      <line x1="352" y1="232" x2="352" y2="412" stroke="#00E5FF" strokeWidth="92" />
+      <line x1="352" y1="612" x2="352" y2="792" stroke="#00E5FF" strokeWidth="92" />
+      <line x1="512" y1="232" x2="512" y2="792" stroke="#00E5FF" strokeWidth="92" />
+      <line x1="672" y1="232" x2="672" y2="412" stroke="#00E5FF" strokeWidth="92" />
+      <line x1="672" y1="612" x2="672" y2="792" stroke="#00E5FF" strokeWidth="92" />
+      <line x1="176" y1="512" x2="432" y2="512" stroke="#FF2A93" strokeWidth="132" />
+      <line x1="592" y1="512" x2="848" y2="512" stroke="#FF2A93" strokeWidth="132" />
+    </svg>
+  );
+}
 
 type TabId = (typeof TABS)[number]["id"];
 
@@ -170,8 +187,8 @@ function App() {
       {/* Titlebar */}
       <div className="wwk-titlebar" onMouseDown={startDrag}>
         <div className="wwk-brand">
-          <span className="glyph">◇</span>
-          <strong>Web Weaver Kit</strong>
+          <span className="glyph" style={{ display: "inline-flex", alignItems: "center" }}><CipherLoomMark size={14} /></span>
+          <strong>CipherLoom</strong>
           <span style={{ marginLeft: 4, color: "var(--text-dim)" }}>· {activeLabel}</span>
         </div>
         <div style={{ flex: 1 }} />
@@ -245,7 +262,7 @@ function App() {
               </div>
               <div className="wwk-menu-sep" />
               <div className="wwk-menu-item" style={{ color: "var(--text-dim)", fontSize: 11, cursor: "default" }}>
-                <span>Web Weaver Kit</span><span className="mono tnum">v{VERSION}</span>
+                <span>CipherLoom</span><span className="mono tnum">v{VERSION}</span>
               </div>
             </div>
           )}
@@ -257,7 +274,10 @@ function App() {
         {tab === "converter" && <ImageConverter />}
         {tab === "renamer" && <FileRenamer />}
         {tab === "pdf" && <PdfToImage />}
-        {tab === "video" && <VideoConverter />}
+        {/* Video tools stay mounted while their FFmpeg jobs run in the backend,
+            so switching tabs doesn't lose the log/result or re-enable the button */}
+        <div style={{ display: tab === "video" ? "contents" : "none" }}><VideoConverter /></div>
+        <div style={{ display: tab === "vcompress" ? "contents" : "none" }}><VideoCompressor /></div>
         {tab === "text" && <TextFormatter />}
         {tab === "crop" && <ImageCropper />}
         {tab === "svg" && <SvgGenerator />}
@@ -275,9 +295,9 @@ function App() {
                   border: "1px solid color-mix(in oklab, var(--primary) 30%, transparent)",
                   color: "var(--primary)", fontSize: 18,
                   boxShadow: "0 0 24px var(--primary-glow)",
-                }}>◇</div>
+                }}><CipherLoomMark size={22} /></div>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>Web Weaver Kit</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>CipherLoom</div>
                   <div className="dim mono tnum" style={{ fontSize: 11, marginTop: 2 }}>v{VERSION}</div>
                 </div>
               </div>
@@ -285,8 +305,9 @@ function App() {
             </div>
             <div className="wwk-dialog-body">
               <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 12.5, lineHeight: 1.6 }}>
-                A small workshop of tools for designers and developers — convert images, batch-rename
-                files, slice PDFs, transcode video, mangle text, crop images, and trace SVG image maps.
+                A small workshop of tools for designers and developers — convert and compress images,
+                batch-rename files, slice PDFs, transcode and shrink video to a target size, mangle
+                text, crop images, and trace SVG image maps.
               </p>
 
               {/* Update status */}

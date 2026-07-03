@@ -5,18 +5,25 @@ import App from "../App";
 describe("App shell", () => {
   it("renders the brand name in the titlebar", () => {
     render(<App />);
-    expect(screen.getByText("Web Weaver Kit")).toBeInTheDocument();
+    expect(screen.getByText("CipherLoom")).toBeInTheDocument();
   });
 
-  it("renders all 7 tab buttons", () => {
+  it("renders all 8 tab buttons", () => {
     render(<App />);
     expect(screen.getByText("Converter")).toBeInTheDocument();
     expect(screen.getByText("File Renamer")).toBeInTheDocument();
     expect(screen.getByText("PDF to Image")).toBeInTheDocument();
     expect(screen.getByText("Video Converter")).toBeInTheDocument();
+    expect(screen.getByText("Video Compressor")).toBeInTheDocument();
     expect(screen.getByText("Text Formatter")).toBeInTheDocument();
     expect(screen.getByText("Image Crop")).toBeInTheDocument();
     expect(screen.getByText("Image Mapping")).toBeInTheDocument();
+  });
+
+  it("switches to the Video Compressor tab", () => {
+    render(<App />);
+    fireEvent.click(screen.getByText("Video Compressor"));
+    expect(screen.getByText("· Video Compressor")).toBeInTheDocument();
   });
 
   it("shows active tab name in titlebar", () => {
@@ -43,7 +50,7 @@ describe("App shell", () => {
     render(<App />);
     fireEvent.click(screen.getByText("☰"));
     fireEvent.click(screen.getByText(/ℹ About/));
-    expect(screen.getByText(/v2\.0\.0/)).toBeInTheDocument();
+    expect(screen.getByText(/v2\.1\.0/)).toBeInTheDocument();
     expect(screen.getByText(/workshop of tools/)).toBeInTheDocument();
   });
 
