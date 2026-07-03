@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#141B2E"/><stop offset="1" stop-color="#05070E"/>
+  </linearGradient>
+  <radialGradient id="haze" cx="0.5" cy="0.46" r="0.62">
+    <stop offset="0" stop-color="#00E5FF" stop-opacity="0.10"/>
+    <stop offset="1" stop-color="#00E5FF" stop-opacity="0"/>
+  </radialGradient>
+</defs>
+<rect width="1024" height="1024" rx="232" fill="url(#bg)"/>
+<rect width="1024" height="1024" rx="232" fill="url(#haze)"/>
+<rect x="26" y="26" width="972" height="972" rx="214" fill="none" stroke="#00E5FF" stroke-opacity="0.18" stroke-width="3"/>
+<g><line x1="272" y1="200" x2="272" y2="824" stroke="#00E5FF" stroke-width="110" stroke-opacity="0.11" stroke-linecap="butt"/><line x1="392" y1="200" x2="392" y2="824" stroke="#00E5FF" stroke-width="110" stroke-opacity="0.11" stroke-linecap="butt"/><line x1="512" y1="200" x2="512" y2="824" stroke="#00E5FF" stroke-width="110" stroke-opacity="0.11" stroke-linecap="butt"/><line x1="632" y1="200" x2="632" y2="824" stroke="#00E5FF" stroke-width="110" stroke-opacity="0.11" stroke-linecap="butt"/><line x1="752" y1="200" x2="752" y2="824" stroke="#00E5FF" stroke-width="110" stroke-opacity="0.11" stroke-linecap="butt"/><line x1="160" y1="512" x2="864" y2="512" stroke="#FF2A93" stroke-width="180" stroke-opacity="0.1" stroke-linecap="butt"/><line x1="160" y1="512" x2="864" y2="512" stroke="#FF2A93" stroke-width="122" stroke-opacity="0.17" stroke-linecap="butt"/><line x1="272" y1="200" x2="272" y2="449.0" stroke="#00E5FF" stroke-width="44" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="272" y1="575.0" x2="272" y2="824" stroke="#00E5FF" stroke-width="44" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="392" y1="200" x2="392" y2="824" stroke="#00E5FF" stroke-width="44" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="512" y1="200" x2="512" y2="449.0" stroke="#00E5FF" stroke-width="44" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="512" y1="575.0" x2="512" y2="824" stroke="#00E5FF" stroke-width="44" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="632" y1="200" x2="632" y2="824" stroke="#00E5FF" stroke-width="44" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="752" y1="200" x2="752" y2="449.0" stroke="#00E5FF" stroke-width="44" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="752" y1="575.0" x2="752" y2="824" stroke="#00E5FF" stroke-width="44" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="160" y1="512" x2="345.0" y2="512" stroke="#FF2A93" stroke-width="76" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="439.0" y1="512" x2="585.0" y2="512" stroke="#FF2A93" stroke-width="76" stroke-opacity="1.0" stroke-linecap="butt"/><line x1="679.0" y1="512" x2="864" y2="512" stroke="#FF2A93" stroke-width="76" stroke-opacity="1.0" stroke-linecap="butt"/></g>
+</svg>

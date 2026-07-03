@@ -1,9 +1,9 @@
 [package]
 name = "app"
-version = "0.1.0"
-description = "WebWeaverKit"
+version = "2.1.0"
+description = "CipherLoom"
 authors = ["Matthew Thomas Stevens Studios LLC"]
-license = ""
+license = "MIT"
 repository = ""
 edition = "2021"
 rust-version = "1.77.2"

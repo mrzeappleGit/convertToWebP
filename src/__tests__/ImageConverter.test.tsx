@@ -40,6 +40,36 @@ describe("ImageConverter", () => {
     expect(screen.getByText("82%")).toBeInTheDocument();
   });
 
+  it("shows size mode pills when Compress is checked", () => {
+    render(<ImageConverter />);
+    expect(screen.getByText("Quality")).toBeInTheDocument();
+    expect(screen.getByText("Target size")).toBeInTheDocument();
+  });
+
+  it("switches to target size mode with KB/MB units", () => {
+    render(<ImageConverter />);
+    fireEvent.click(screen.getByText("Target size"));
+    expect(screen.getByText(/Max size per image/)).toBeInTheDocument();
+    expect(screen.getByText("KB")).toBeInTheDocument();
+    expect(screen.getByText("MB")).toBeInTheDocument();
+    expect(screen.queryByText(/Quality target/)).not.toBeInTheDocument();
+  });
+
+  it("defaults to 200 KB in target size mode", () => {
+    render(<ImageConverter />);
+    fireEvent.click(screen.getByText("Target size"));
+    expect(screen.getByDisplayValue("200")).toBeInTheDocument();
+    expect(screen.getByText("KB").className).toContain("active");
+  });
+
+  it("switches back to quality mode", () => {
+    render(<ImageConverter />);
+    fireEvent.click(screen.getByText("Target size"));
+    fireEvent.click(screen.getByText("Quality"));
+    expect(screen.getByText(/Quality target/)).toBeInTheDocument();
+    expect(screen.queryByText(/Max size per image/)).not.toBeInTheDocument();
+  });
+
   it("shows resize slider when Resize is checked", () => {
     render(<ImageConverter />);
     // Click Resize checkbox

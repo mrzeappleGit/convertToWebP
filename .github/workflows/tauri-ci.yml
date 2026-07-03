@@ -28,16 +28,16 @@ jobs:
       matrix:
         include:
           - platform: windows-latest
-            artifact: WebWeaverKit-windows
-            bundle-path: src-tauri/target/release/WebWeaverKit.exe
+            artifact: CipherLoom-windows
+            bundle-path: src-tauri/target/release/CipherLoom.exe
           - platform: ubuntu-22.04
-            artifact: WebWeaverKit-linux
+            artifact: CipherLoom-linux
             bundle-path: |
               src-tauri/target/release/bundle/deb/*.deb
               src-tauri/target/release/bundle/rpm/*.rpm
               src-tauri/target/release/bundle/appimage/*.AppImage
           - platform: macos-latest
-            artifact: WebWeaverKit-macos
+            artifact: CipherLoom-macos
             bundle-path: |
               src-tauri/target/release/bundle/dmg/*.dmg
 
@@ -126,7 +126,7 @@ jobs:
         if: matrix.platform == 'windows-latest'
         run: |
           npm run tauri build -- --no-bundle
-          mv src-tauri/target/release/app.exe src-tauri/target/release/WebWeaverKit.exe
+          mv src-tauri/target/release/app.exe src-tauri/target/release/CipherLoom.exe
 
       # Build on Linux
       - name: Build (Linux)

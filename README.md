@@ -1,11 +1,12 @@
-# Web Weaver Kit
+# CipherLoom
 
-A desktop toolkit for designers and developers — convert images, batch-rename files, slice PDFs, transcode video, format text, crop images, and trace SVG image maps. Built with Tauri, React, and Rust.
+![CipherLoom](branding/CipherLoomBanner.png)
+
+A desktop toolkit for designers and developers — convert and compress images, shrink videos to an exact file size, batch-rename files, slice PDFs, transcode video, format text, crop images, and trace SVG image maps. Built with Tauri, React, and Rust.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Binary Size](https://img.shields.io/badge/binary-22MB-green)
-![Tests](https://img.shields.io/badge/tests-91%20passing-brightgreen)
 
 ## Download
 
@@ -13,19 +14,37 @@ Grab the latest release from [Releases](https://github.com/mrzeappleGit/convertT
 
 | Platform | Format |
 |---|---|
-| **Windows** | `.exe` (portable) or `.msi` (installer) |
+| **Windows** | `.exe` (portable) |
 | **macOS** | `.dmg` |
 | **Linux** | `.AppImage`, `.deb`, or `.rpm` |
 
-Windows and macOS builds bundle FFmpeg. Linux packages declare `ffmpeg` as a system dependency.
+macOS builds bundle FFmpeg. The portable Windows exe looks for `ffmpeg.exe` next to the executable or on your `PATH`. Linux packages declare `ffmpeg` as a system dependency.
 
 ## Tools
 
 ### Image Converter
 Batch convert images between formats with compression and resizing.
 - **Formats**: WebP, PNG, JPEG, JPEGLI, AVIF, TIFF, BMP, GIF, ICO
-- **Options**: Quality compression (0–100%), resize by percentage, rename to slug
+- **Quality mode**: Quality compression (0–100%)
+- **Target size mode**: Set a max size per image (KB/MB) — quality and resolution are searched automatically until each image fits
+- **Options**: Resize by percentage, rename to slug
 - **Batch**: Select a folder and convert everything at once
+
+### Video Compressor
+Shrink a video to an exact file size with two-pass encoding.
+- **Target size**: Pick MB or GB — bitrate is computed from the video's duration
+- **Auto everything**: Audio bitrate, video bitrate, and resolution are chosen automatically to fit the target
+- **Formats**: MP4 (H.264 + AAC) or WebM (VP9 + Opus)
+- **Two-pass**: First pass analyzes, second pass hits the size accurately
+- **Live log**: FFmpeg output streams to the UI in real time
+
+### Video Converter
+Transcode video files with FFmpeg (bundled).
+- **Formats**: MP4 (H.264, H.265) and WebM (VP9)
+- **Audio**: AAC or Opus codecs
+- **Quality**: CRF slider (0–51)
+- **Resolution**: Original, 1080p, 720p, 480p
+- **Live log**: FFmpeg output streams to the UI in real time
 
 ### File Renamer
 Batch rename files with live preview before committing.
@@ -40,14 +59,6 @@ Convert PDF pages to raster images with quality control.
 - **Formats**: WebP, PNG, JPEG with quality slider
 - **Preview**: Live page preview with page navigation
 - **Options**: Include/exclude margins
-
-### Video Converter
-Transcode video files with FFmpeg (bundled).
-- **Formats**: MP4 (H.264, H.265) and WebM (VP9)
-- **Audio**: AAC or Opus codecs
-- **Quality**: CRF slider (0–51)
-- **Resolution**: Original, 1080p, 720p, 480p
-- **Live log**: FFmpeg output streams to the UI in real time
 
 ### Text Formatter
 Convert text between common programming formats with live preview.
@@ -91,7 +102,7 @@ Theme selection persists across sessions.
 
 ## Settings
 
-Preferences are saved to `%APPDATA%/mts-studios/WebWeaverKit/settings.json` and persist across sessions:
+Preferences are saved to `%APPDATA%/mts-studios/CipherLoom/settings.json` and persist across sessions (settings from Web Weaver Kit installs are migrated automatically):
 - Selected theme
 - Converter defaults (format, quality, compression, resize)
 - Renamer defaults (slug, case, prefix/suffix)
@@ -114,7 +125,7 @@ The app checks GitHub releases on launch. When an update is available:
 | PDF rendering | pdf.js (Mozilla) |
 | Video transcoding | FFmpeg (bundled) |
 | HTTP | reqwest (Rust) |
-| Tests | Vitest, Testing Library (91 tests) |
+| Tests | Vitest, Testing Library |
 | CI | GitHub Actions |
 | Design | Claude Design system |
 
@@ -147,14 +158,14 @@ npm test
 npm run tauri build
 ```
 
-The built executable and installers will be in `src-tauri/target/release/bundle/`.
+The executable lands in `src-tauri/target/release/`; platform installers (when bundling) in `src-tauri/target/release/bundle/`.
 
 ## Project Structure
 
 ```
 ├── src/                     # React frontend
-│   ├── components/          # Tool components (9 files)
-│   ├── __tests__/           # Test files (11 files, 91 tests)
+│   ├── components/          # Tool components
+│   ├── __tests__/           # Test files
 │   ├── styles/              # CSS design system + themes
 │   ├── App.tsx              # App shell, tabs, menu, dialogs
 │   ├── themes.ts            # 9 theme definitions
@@ -164,6 +175,7 @@ The built executable and installers will be in `src-tauri/target/release/bundle/
 │   ├── src/lib.rs           # All Tauri commands
 │   ├── tauri.conf.json      # Window, bundle, and plugin config
 │   └── capabilities/        # Permission definitions
+├── branding/                # CipherLoom logos, icons, banners
 ├── resources/               # Bundled binaries (ffmpeg, cjpegli)
 ├── public/                  # Static assets
 ├── .github/workflows/       # CI pipeline (test + build)
