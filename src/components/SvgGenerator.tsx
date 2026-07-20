@@ -18,7 +18,7 @@ export function SvgGenerator() {
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [color, setColor] = useState("#55d8e1");
   const [svgOutput, setSvgOutput] = useState("");
-  const [allElements, setAllElements] = useState<string[]>([]);
+  const [allElements, setAllElements] = useState<{ d: string; color: string; sw: number }[]>([]);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ w: 600, h: 400 });
@@ -238,13 +238,12 @@ export function SvgGenerator() {
     const oc = canvasToOrig(cx, cy);
     if (!oc) return;
 
-    const sw = `stroke-width="${strokeWidth}"`;
-
     if (mode === "Circle") {
       setCircleOrig(oc);
-      const svg = `<circle cx="${oc.x.toFixed(1)}" cy="${oc.y.toFixed(1)}" r="${radius}" fill="none" stroke="${color}" ${sw} />`;
-      setSvgOutput(svg);
-      setAllElements((prev) => [...prev, svg]);
+      // Circle as two 180° arcs starting from the top point
+      const d = `M${oc.x.toFixed(2)} ${(oc.y - radius).toFixed(2)}a${radius},${radius} 0 1 0 0,${radius * 2}a${radius},${radius} 0 1 0 0,${-radius * 2}Z`;
+      setSvgOutput(d);
+      setAllElements((prev) => [...prev, { d, color, sw: strokeWidth }]);
     } else if (mode === "Polygon") {
       if (polyClosed) return;
       const CLOSE_DIST = 15;
@@ -254,19 +253,17 @@ export function SvgGenerator() {
           const dx = cx - first.x, dy = cy - first.y;
           if (dx * dx + dy * dy < CLOSE_DIST * CLOSE_DIST) {
             setPolyClosed(true);
-            const d = polyOrig.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ") + " Z";
-            const svg = `<path d="${d}" fill="none" stroke="${color}" ${sw} />`;
-            setSvgOutput(svg);
-            setAllElements((prev) => [...prev, svg]);
+            const d = polyOrig.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join("") + "Z";
+            setSvgOutput(d);
+            setAllElements((prev) => [...prev, { d, color, sw: strokeWidth }]);
             return;
           }
         }
       }
       const newPts = [...polyOrig, oc];
       setPolyOrig(newPts);
-      // Generate in-progress SVG
-      const d = newPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-      setSvgOutput(`<path d="${d}" fill="none" stroke="${color}" ${sw} />`);
+      // In-progress path data
+      setSvgOutput(newPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(""));
     } else if (mode === "Rectangle") {
       if (rectOrigB) return;
       if (!rectOrigA) {
@@ -275,9 +272,9 @@ export function SvgGenerator() {
         setRectOrigB(oc);
         const rx = Math.min(rectOrigA.x, oc.x), ry = Math.min(rectOrigA.y, oc.y);
         const rw = Math.abs(oc.x - rectOrigA.x), rh = Math.abs(oc.y - rectOrigA.y);
-        const svg = `<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" fill="none" stroke="${color}" ${sw} />`;
-        setSvgOutput(svg);
-        setAllElements((prev) => [...prev, svg]);
+        const d = `M${rx.toFixed(2)} ${ry.toFixed(2)}h${rw.toFixed(2)}v${rh.toFixed(2)}h${(-rw).toFixed(2)}Z`;
+        setSvgOutput(d);
+        setAllElements((prev) => [...prev, { d, color, sw: strokeWidth }]);
       }
     }
   };
@@ -294,7 +291,8 @@ export function SvgGenerator() {
   const handleExportSvg = async () => {
     if (!allElements.length) return;
     const { w, h } = imageSize.w > 0 ? imageSize : { w: 800, h: 600 };
-    const content = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">\n  ${allElements.join("\n  ")}\n</svg>\n`;
+    const paths = allElements.map(el => `<path d="${el.d}" fill="none" stroke="${el.color}" stroke-width="${el.sw}" />`);
+    const content = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">\n  ${paths.join("\n  ")}\n</svg>\n`;
     const path = await invoke<string | null>("save_file_dialog", {
       title: "Export SVG",
       defaultName: "shapes.svg",
