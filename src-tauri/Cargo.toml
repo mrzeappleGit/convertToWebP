@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "app"
 version = "2.2.0"
 description = "CipherLoom"
