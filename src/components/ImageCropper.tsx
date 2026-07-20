@@ -330,7 +330,7 @@ export function ImageCropper() {
   const cropH = crop ? Math.round(crop.h) : 0;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", height: "100%" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", height: "100%", flex: 1, minWidth: 0 }}>
       {/* Canvas */}
       <div style={{ display: "flex", flexDirection: "column", minWidth: 0, borderRight: "1px solid var(--border)" }}>
         <div className="row between center" style={{ padding: "10px 16px", flexShrink: 0 }}>
