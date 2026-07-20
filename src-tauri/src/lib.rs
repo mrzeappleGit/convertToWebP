@@ -914,7 +914,7 @@ fn save_settings(settings: serde_json::Value) -> Result<(), String> {
 // ── Auto-updater (GitHub releases) ───────────────────────────────
 
 const GITHUB_REPO: &str = "mrzeappleGit/convertToWebP";
-const CURRENT_VERSION: &str = "2.1.0";
+const CURRENT_VERSION: &str = "2.2.0";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -20,7 +20,10 @@ export function SvgGenerator() {
   const [svgOutput, setSvgOutput] = useState("");
   const [allElements, setAllElements] = useState<string[]>([]);
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ w: 600, h: 400 });
+  // Drag-to-pan bookkeeping; `moved` distinguishes a pan from a shape-placing click
+  const dragRef = useRef<{ sx: number; sy: number; px: number; py: number; moved: boolean } | null>(null);
 
   // Shape state stored as original-image coords so they survive redraws
   const [circleOrig, setCircleOrig] = useState<Point | null>(null);
@@ -37,9 +40,9 @@ export function SvgGenerator() {
     if (cw <= 0 || ch <= 0) return null;
     const scale = Math.min(cw / img.width, ch / img.height) * zoom;
     const dw = img.width * scale, dh = img.height * scale;
-    const dx = (cw - dw) / 2, dy = (ch - dh) / 2;
+    const dx = (cw - dw) / 2 + pan.x, dy = (ch - dh) / 2 + pan.y;
     return { dx, dy, dw, dh, scale, ow: img.width, oh: img.height };
-  }, [canvasSize, zoom]);
+  }, [canvasSize, zoom, pan]);
 
   const canvasToOrig = useCallback((cx: number, cy: number): Point | null => {
     const m = getDisplayMetrics();
@@ -75,6 +78,49 @@ export function SvgGenerator() {
     obs.observe(wrap);
     return () => obs.disconnect();
   }, []);
+
+  // ── Wheel zoom (anchored at cursor) ────────────────────────
+  const handleWheel = (e: WheelEvent) => {
+    if (!imageRef.current) return;
+    e.preventDefault();
+    const m = getDisplayMetrics();
+    if (!m) return;
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const newZoom = Math.min(4, Math.max(0.25, zoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
+    const f = newZoom / zoom;
+    if (f === 1) return;
+    // Keep the image point under the cursor stationary
+    setPan({
+      x: cx - (cx - m.dx) * f - (canvasSize.w - m.dw * f) / 2,
+      y: cy - (cy - m.dy) * f - (canvasSize.h - m.dh * f) / 2,
+    });
+    setZoom(newZoom);
+  };
+  const wheelRef = useRef(handleWheel);
+  wheelRef.current = handleWheel;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    // Native listener: React's onWheel can be passive, blocking preventDefault
+    const h = (e: WheelEvent) => wheelRef.current(e);
+    canvas.addEventListener("wheel", h, { passive: false });
+    return () => canvas.removeEventListener("wheel", h);
+  }, []);
+
+  // ── Drag to pan ────────────────────────────────────────────
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!imageRef.current) return;
+    dragRef.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y, moved: false };
+  };
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) d.moved = true;
+    if (d.moved) setPan({ x: d.px + dx, y: d.py + dy });
+  };
+  const handleMouseLeave = () => { dragRef.current = null; };
 
   // ── Draw ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -171,6 +217,7 @@ export function SvgGenerator() {
         setImageSize({ w: img.width, h: img.height });
         setImageLoaded(true);
         setZoom(1);
+        setPan({ x: 0, y: 0 });
         clearShape();
       };
       img.src = src;
@@ -181,6 +228,9 @@ export function SvgGenerator() {
 
   // ── Click handling ───────────────────────────────────────────
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const wasPan = dragRef.current?.moved;
+    dragRef.current = null;
+    if (wasPan) return;
     if (!imageRef.current) return;
     const rect = canvasRef.current!.getBoundingClientRect();
     const cx = e.clientX - rect.left;
@@ -270,7 +320,7 @@ export function SvgGenerator() {
     : "";
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", height: "100%" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", height: "100%", flex: 1, minWidth: 0 }}>
       {/* Canvas */}
       <div style={{ display: "flex", flexDirection: "column", minWidth: 0, borderRight: "1px solid var(--border)", position: "relative" }}>
         <div className="row between center" style={{ padding: "10px 16px", flexShrink: 0 }}>
@@ -289,12 +339,16 @@ export function SvgGenerator() {
           </div>
         </div>
         <div ref={wrapRef} style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          <canvas ref={canvasRef} onClick={handleCanvasClick} style={{
+          <canvas ref={canvasRef} onClick={handleCanvasClick}
+            onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}
+            style={{
             position: "absolute", inset: 0, width: "100%", height: "100%",
             background: "var(--bg)", cursor: imageLoaded ? "crosshair" : "default",
           }} />
         </div>
-        <p className="dim" style={{ fontSize: 12, padding: "8px 16px", flexShrink: 0 }}>{instruction}</p>
+        <p className="dim" style={{ fontSize: 12, padding: "8px 16px", flexShrink: 0 }}>
+          {instruction}{imageLoaded && " Drag to pan · scroll to zoom."}
+        </p>
       </div>
 
       {/* Controls */}

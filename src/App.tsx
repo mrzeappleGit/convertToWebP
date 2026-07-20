@@ -13,7 +13,7 @@ import { THEMES, applyTheme } from "./themes";
 import { useSettings } from "./useSettings";
 import { invoke } from "./invoke";
 
-const VERSION = "2.1.0";
+const VERSION = "2.2.0";
 
 const TABS = [
   { id: "converter", label: "Converter", icon: "🖼" },

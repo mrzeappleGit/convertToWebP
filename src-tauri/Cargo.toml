@@ -1,6 +1,6 @@
-[package]
+﻿[package]
 name = "app"
-version = "2.1.0"
+version = "2.2.0"
 description = "CipherLoom"
 authors = ["Matthew Thomas Stevens Studios LLC"]
 license = "MIT"

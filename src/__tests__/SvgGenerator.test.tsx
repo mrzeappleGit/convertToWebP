@@ -74,6 +74,13 @@ describe("SvgGenerator", () => {
     expect(screen.getByText("75%")).toBeInTheDocument();
   });
 
+  it("ignores wheel zoom before an image is loaded", () => {
+    const { container } = render(<SvgGenerator />);
+    const canvas = container.querySelector("canvas")!;
+    fireEvent.wheel(canvas, { deltaY: -100 });
+    expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
   it("shows instruction text", () => {
     render(<SvgGenerator />);
     expect(screen.getByText("Load an image to begin.")).toBeInTheDocument();
