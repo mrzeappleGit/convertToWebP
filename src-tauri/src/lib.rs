@@ -274,6 +274,7 @@ fn encode_image_to_memory(img: &image::DynamicImage, format: &str, quality: u8) 
             img.write_with_encoder(encoder).map_err(|e| e.to_string())?;
             Ok(buf)
         }
+        "png" if quality < 100 => encode_quantized_png(img, quality),
         "png" | "gif" | "bmp" | "tiff" | "ico" => {
             let fmt = match format {
                 "png" => ImageFormat::Png,
@@ -297,31 +298,69 @@ fn encode_image_to_memory(img: &image::DynamicImage, format: &str, quality: u8) 
     }
 }
 
+/// TinyPNG-style lossy PNG: quantize to a 256-color RGBA palette and write an
+/// indexed PNG (1 byte/px + PLTE/tRNS instead of truecolor) — typically far
+/// smaller with little visible loss. Lower quality samples fewer pixels when
+/// building the palette (faster, rougher).
+fn encode_quantized_png(img: &image::DynamicImage, quality: u8) -> Result<Vec<u8>, String> {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let samplefac = ((100 - quality as i32) / 10 + 1).clamp(1, 10);
+    let nq = color_quant::NeuQuant::new(samplefac, 256, rgba.as_raw());
+    let indices: Vec<u8> = rgba.pixels().map(|p| nq.index_of(&p.0) as u8).collect();
+
+    let mut plte = Vec::with_capacity(256 * 3);
+    let mut trns = Vec::with_capacity(256);
+    for c in nq.color_map_rgba().chunks(4) {
+        plte.extend_from_slice(&c[..3]);
+        trns.push(c[3]);
+    }
+
+    let mut buf = Vec::new();
+    let mut enc = png::Encoder::new(&mut buf, w, h);
+    enc.set_color(png::ColorType::Indexed);
+    enc.set_depth(png::BitDepth::Eight);
+    enc.set_palette(plte);
+    enc.set_trns(trns);
+    enc.set_compression(png::Compression::Best);
+    let mut writer = enc.write_header().map_err(|e| e.to_string())?;
+    writer.write_image_data(&indices).map_err(|e| e.to_string())?;
+    writer.finish().map_err(|e| e.to_string())?;
+    Ok(buf)
+}
+
 /// Formats where a quality knob meaningfully changes output size.
 fn is_lossy_format(format: &str) -> bool {
     matches!(format, "webp" | "jpeg" | "jpegli" | "avif")
 }
 
-/// Find the encoding of `img` that fits within `target_bytes`.
-/// Lossy formats: binary-search quality; if even minimum quality is too big,
-/// downscale and retry. Lossless formats: downscale only.
+/// Find the encoding of `img` that fits within `target_bytes`, trading both
+/// quality and resolution. Lossy formats: binary-search quality; if fitting
+/// requires quality below GOOD_Q, downscale and re-search so the result is a
+/// smaller-but-clean image rather than a full-size artifact-ridden one (the
+/// low-quality fit is kept as a fallback). Lossless formats: downscale only,
+/// except PNG which tries palette quantization first.
 fn fit_image_to_target(img: &image::DynamicImage, format: &str, target_bytes: u64) -> Result<Vec<u8>, String> {
     const MIN_Q: u8 = 5;
     const MAX_Q: u8 = 95;
+    // ponytail: fixed quality floor; make user-tunable if 70 proves wrong
+    const GOOD_Q: u8 = 70;
     let lossy = is_lossy_format(format);
     let mut current = img.clone();
+    let mut fallback: Option<Vec<u8>> = None;
 
     for _ in 0..12 {
-        // Smallest encoding achievable at the current dimensions
+        // Smallest encoding achievable at the current dimensions, or None if
+        // we already fit here (just not at a quality worth keeping)
         let floor_data = if lossy {
             let mut lo = MIN_Q;
             let mut hi = MAX_Q;
-            let mut best: Option<Vec<u8>> = None;
+            let mut best: Option<(u8, Vec<u8>)> = None;
             while lo <= hi {
                 let mid = ((lo as u16 + hi as u16) / 2) as u8;
                 let data = encode_image_to_memory(&current, format, mid)?;
                 if data.len() as u64 <= target_bytes {
-                    best = Some(data);
+                    best = Some((mid, data));
                     lo = mid + 1;
                 } else if mid <= MIN_Q {
                     break;
@@ -329,32 +368,48 @@ fn fit_image_to_target(img: &image::DynamicImage, format: &str, target_bytes: u6
                     hi = mid - 1;
                 }
             }
-            if let Some(data) = best {
-                return Ok(data);
+            match best {
+                Some((q, data)) if q >= GOOD_Q => return Ok(data),
+                Some((_, data)) => {
+                    fallback = Some(data);
+                    None
+                }
+                None => Some(encode_image_to_memory(&current, format, MIN_Q)?),
             }
-            encode_image_to_memory(&current, format, MIN_Q)?
         } else {
             let data = encode_image_to_memory(&current, format, 100)?;
             if data.len() as u64 <= target_bytes {
                 return Ok(data);
             }
-            data
+            if format == "png" {
+                // Quantized palette PNG before giving up resolution
+                let q = encode_quantized_png(&current, 80)?;
+                if q.len() as u64 <= target_bytes {
+                    return Ok(q);
+                }
+                Some(q)
+            } else {
+                Some(data)
+            }
         };
 
-        // Still too big — shrink dimensions proportionally to the overshoot
-        let ratio = target_bytes as f64 / floor_data.len() as f64;
-        let factor = (ratio.sqrt() * 0.95).clamp(0.3, 0.9);
+        // Shrink: proportionally to the overshoot when nothing fits, a gentle
+        // step when we fit but want the quality back
+        let factor = match &floor_data {
+            Some(data) => {
+                let ratio = target_bytes as f64 / data.len() as f64;
+                (ratio.sqrt() * 0.95).clamp(0.3, 0.9)
+            }
+            None => 0.85,
+        };
         let nw = ((current.width() as f64) * factor).round() as u32;
         let nh = ((current.height() as f64) * factor).round() as u32;
         if nw < 16 || nh < 16 {
-            return Err(format!(
-                "Cannot reach {} even at minimum quality and size",
-                format_bytes(target_bytes)
-            ));
+            break;
         }
         current = current.resize_exact(nw, nh, image::imageops::FilterType::Lanczos3);
     }
-    Err(format!("Could not reach target size of {}", format_bytes(target_bytes)))
+    fallback.ok_or_else(|| format!("Could not reach target size of {}", format_bytes(target_bytes)))
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1180,10 +1235,44 @@ mod tests {
     }
 
     #[test]
+    fn fit_trades_resolution_for_quality() {
+        // Pick a target that fits at full res only at ugly quality (2x the
+        // minimum-quality floor); the fitter should downscale instead
+        let img = noise_image(512, 512);
+        let floor = encode_image_to_memory(&img, "jpeg", 5).unwrap().len() as u64;
+        let target = floor * 2;
+        let data = fit_image_to_target(&img, "jpeg", target).unwrap();
+        assert!(data.len() as u64 <= target, "got {} bytes", data.len());
+        let decoded = image::load_from_memory(&data).unwrap();
+        assert!(decoded.width() < 512, "expected downscale, got {}px wide", decoded.width());
+    }
+
+    #[test]
     fn fit_generous_target_needs_no_shrinking() {
         let img = noise_image(64, 64);
         let data = fit_image_to_target(&img, "jpeg", 10 * 1024 * 1024).unwrap();
         assert!(!data.is_empty());
+    }
+
+    #[test]
+    fn quantized_png_is_smaller_and_decodes() {
+        let img = noise_image(128, 128);
+        let lossless = encode_image_to_memory(&img, "png", 100).unwrap();
+        let lossy = encode_image_to_memory(&img, "png", 80).unwrap();
+        assert!(lossy.len() < lossless.len(), "quantized {} >= lossless {}", lossy.len(), lossless.len());
+        let decoded = image::load_from_memory(&lossy).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (128, 128));
+    }
+
+    #[test]
+    fn quantized_png_keeps_alpha() {
+        let rgba = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            32, 32, image::Rgba([200, 100, 50, 128]),
+        ));
+        let data = encode_image_to_memory(&rgba, "png", 80).unwrap();
+        let decoded = image::load_from_memory(&data).unwrap().to_rgba8();
+        let a = decoded.get_pixel(16, 16).0[3];
+        assert!((a as i16 - 128).abs() <= 8, "alpha {} drifted too far from 128", a);
     }
 
     #[test]

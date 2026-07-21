@@ -121,6 +121,10 @@ export function SvgGenerator() {
     if (d.moved) setPan({ x: d.px + dx, y: d.py + dy });
   };
   const handleMouseLeave = () => { dragRef.current = null; };
+  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Middle/right releases never fire onClick, which normally ends the drag
+    if (e.button !== 0) dragRef.current = null;
+  };
 
   // ── Draw ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -338,7 +342,7 @@ export function SvgGenerator() {
         </div>
         <div ref={wrapRef} style={{ flex: 1, minHeight: 0, position: "relative" }}>
           <canvas ref={canvasRef} onClick={handleCanvasClick}
-            onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}
+            onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave}
             style={{
             position: "absolute", inset: 0, width: "100%", height: "100%",
             background: "var(--bg)", cursor: imageLoaded ? "crosshair" : "default",
