@@ -91,6 +91,17 @@
   --text: #d1f0ff; --text-muted: #7a88a0; --text-dim: #484e65;
   --error: #ff2a6d;
 }
+/* From the CipherDaemon Design System (Claude Design): cyan identity on
+   blue-green dark layers, purple reserved as tertiary, semantic warn/danger */
+[data-theme="cipher"] {
+  --bg: #070b0f; --surface: #0e141b; --surface-1: #131b24; --surface-2: #1a242f; --surface-3: #22303c;
+  --border: rgba(120,200,190,0.16); --border-strong: rgba(0,255,204,0.40);
+  --text: #e6fbf5; --text-muted: #a9cfc7; --text-dim: #86b3aa;
+  --primary: #00ffcc; --primary-soft: rgba(0,255,204,0.14); --primary-glow: rgba(0,255,204,0.32);
+  --secondary: #11b89c; --secondary-soft: rgba(17,184,156,0.16);
+  --tertiary: #b388ff;
+  --error: #ff5c6a; --warn: #ffb340;
+}
 [data-theme="bone"] {
   --bg: #f6f3ec; --surface: #efeae0; --surface-1: #ebe5d8; --surface-2: #e3dcce; --surface-3: #d9d2c1;
   --border: #d0c8b5; --border-strong: #b9b09c; --hairline: rgba(0,0,0,0.05);
@@ -557,7 +568,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
 }
 
 /* Responsive */
-@media (max-width: 900px) {
+/* Below this, labeled tabs overflow the bar (scrollbar is hidden) — drop to icons */
+@media (max-width: 1150px) {
   .wwk-tab span:not(.tab-icon) { display: none; }
   .wwk-tab { padding: 0 10px; gap: 0; }
   .wwk-tab .tab-icon { font-size: 16px; }

@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "2.2.1"
+version = "2.3.0"
 description = "CipherLoom"
 authors = ["Matthew Thomas Stevens Studios LLC"]
 license = "MIT"
@@ -25,6 +25,8 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 image = { version = "0.25", features = ["webp", "png", "jpeg", "gif", "bmp", "tiff", "ico"] }
+color_quant = "1.1"
+png = "0.17"
 webp = "0.3"
 regex = "1"
 base64 = "0.22"

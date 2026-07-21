@@ -7,8 +7,8 @@ describe("Themes", () => {
     document.documentElement.removeAttribute("data-theme");
   });
 
-  it("has 9 theme definitions", () => {
-    expect(THEMES).toHaveLength(9);
+  it("has 10 theme definitions", () => {
+    expect(THEMES).toHaveLength(10);
   });
 
   it("each theme has id, name, and 3-color swatch", () => {

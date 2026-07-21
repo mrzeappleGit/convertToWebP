@@ -7,6 +7,7 @@ export const THEMES = [
   { id: "cobalt", name: "Cobalt", swatch: ["#0a0e16", "#5b9dff", "#67e8f9"] },
   { id: "textbook", name: "Textbook", swatch: ["#0c1828", "#e21a23", "#0077c8"] },
   { id: "neon", name: "Neon City", swatch: ["#0c0b16", "#e8f030", "#ff2a6d"] },
+  { id: "cipher", name: "Cipher", swatch: ["#0e141b", "#00ffcc", "#11b89c"] },
   { id: "bone", name: "Bone", swatch: ["#f6f3ec", "#3f7d4b", "#1f6b80"] },
 ];
 
