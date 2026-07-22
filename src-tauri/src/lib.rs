@@ -969,7 +969,8 @@ fn save_settings(settings: serde_json::Value) -> Result<(), String> {
 // ── Auto-updater (GitHub releases) ───────────────────────────────
 
 const GITHUB_REPO: &str = "mrzeappleGit/convertToWebP";
-const CURRENT_VERSION: &str = "2.2.1";
+// Single source of truth: Cargo.toml (kept in sync with tauri.conf.json / package.json)
+const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

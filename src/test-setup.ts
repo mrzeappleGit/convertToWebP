@@ -6,6 +6,13 @@ Object.defineProperty(window, "__TAURI_INTERNALS__", { value: undefined });
 // Mock scrollIntoView (not available in jsdom)
 Element.prototype.scrollIntoView = () => {};
 
+// Mock ResizeObserver (not available in jsdom)
+globalThis.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 // Mock canvas getContext
 const noop = () => {};
 const mockCtx = {
