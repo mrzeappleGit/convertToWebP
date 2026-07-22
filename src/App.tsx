@@ -13,7 +13,9 @@ import { THEMES, applyTheme } from "./themes";
 import { useSettings } from "./useSettings";
 import { invoke } from "./invoke";
 
-const VERSION = "2.2.1";
+import pkg from "../package.json";
+
+const VERSION = pkg.version;
 
 const TABS = [
   { id: "converter", label: "Converter", icon: "🖼" },
@@ -271,16 +273,16 @@ function App() {
 
       {/* Content */}
       <div className="wwk-content">
-        {tab === "converter" && <ImageConverter />}
-        {tab === "renamer" && <FileRenamer />}
-        {tab === "pdf" && <PdfToImage />}
-        {/* Video tools stay mounted while their FFmpeg jobs run in the backend,
-            so switching tabs doesn't lose the log/result or re-enable the button */}
+        {/* All tools stay mounted so switching tabs never loses their state
+            (selections, logs, in-flight jobs); "contents" keeps layout intact */}
+        <div style={{ display: tab === "converter" ? "contents" : "none" }}><ImageConverter /></div>
+        <div style={{ display: tab === "renamer" ? "contents" : "none" }}><FileRenamer /></div>
+        <div style={{ display: tab === "pdf" ? "contents" : "none" }}><PdfToImage /></div>
         <div style={{ display: tab === "video" ? "contents" : "none" }}><VideoConverter /></div>
         <div style={{ display: tab === "vcompress" ? "contents" : "none" }}><VideoCompressor /></div>
-        {tab === "text" && <TextFormatter />}
-        {tab === "crop" && <ImageCropper />}
-        {tab === "svg" && <SvgGenerator />}
+        <div style={{ display: tab === "text" ? "contents" : "none" }}><TextFormatter /></div>
+        <div style={{ display: tab === "crop" ? "contents" : "none" }}><ImageCropper /></div>
+        <div style={{ display: tab === "svg" ? "contents" : "none" }}><SvgGenerator /></div>
       </div>
 
       {/* About / Update Dialog */}
