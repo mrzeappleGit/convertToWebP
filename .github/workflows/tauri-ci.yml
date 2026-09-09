@@ -42,6 +42,9 @@ jobs:
               src-tauri/target/release/bundle/dmg/*.dmg
 
     runs-on: ${{ matrix.platform }}
+    # Dependabot-triggered runs get no repository secrets; fall back to an unsigned macOS build
+    env:
+      MAC_SIGN: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -72,7 +75,7 @@ jobs:
 
       # macOS: import signing certificate into keychain (must happen before codesigning ffmpeg)
       - name: Import Apple signing certificate
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos-latest' && env.MAC_SIGN == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -105,21 +108,27 @@ jobs:
           curl -L "https://evermeet.cx/ffmpeg/getrelease/zip" -o ffmpeg.zip
           unzip ffmpeg.zip -d resources/
           chmod +x resources/ffmpeg
-          codesign --force --options runtime --sign "${{ secrets.APPLE_SIGNING_IDENTITY }}" --timestamp resources/ffmpeg
-          codesign -vvv resources/ffmpeg
-          echo "FFmpeg signed successfully"
+          if [ "$MAC_SIGN" = "true" ]; then
+            codesign --force --options runtime --sign "${{ secrets.APPLE_SIGNING_IDENTITY }}" --timestamp resources/ffmpeg
+            codesign -vvv resources/ffmpeg
+            echo "FFmpeg signed successfully"
+          fi
 
       - run: npm ci
 
       # Build with signing + notarization on macOS
       - name: Build (macOS signed + notarized)
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos-latest' && env.MAC_SIGN == 'true'
         run: npm run tauri build
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Build (macOS unsigned)
+        if: matrix.platform == 'macos-latest' && env.MAC_SIGN != 'true'
+        run: npm run tauri build
 
       # Build on Windows (standalone exe, no installer)
       - name: Build (Windows)
