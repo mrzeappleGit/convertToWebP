@@ -108,7 +108,9 @@ jobs:
         if: matrix.platform == 'macos-latest'
         run: |
           mkdir -p resources
-          curl -L "https://evermeet.cx/ffmpeg/getrelease/zip" -o ffmpeg.zip
+          # Pinned arm64 release build (evermeet.cx's "latest" endpoint was removed); bump URL + hash together
+          curl -fL "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip" -o ffmpeg.zip
+          echo "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924  ffmpeg.zip" | shasum -a 256 -c -
           unzip ffmpeg.zip -d resources/
           chmod +x resources/ffmpeg
           if [ "$MAC_SIGN" = "true" ]; then
