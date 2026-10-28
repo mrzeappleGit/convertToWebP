@@ -171,9 +171,13 @@ One-time setup:
 2. Paste the contents of `~/.tauri/cipherloom.key.pub` into `UPDATE_PUBKEY` in `src-tauri/src/lib.rs`.
 3. Add GitHub repository secrets: `TAURI_SIGNING_PRIVATE_KEY` (contents of `~/.tauri/cipherloom.key`) and, if you set one, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
-Each release: upload both `CipherLoom.exe` and `CipherLoom.exe.sig` from the `CipherLoom-windows` CI artifact. To sign a local build instead: `npx tauri signer sign -f $HOME/.tauri/cipherloom.key src-tauri/target/release/CipherLoom.exe`.
+To sign a local build: `npx tauri signer sign -f $HOME/.tauri/cipherloom.key src-tauri/target/release/CipherLoom.exe`.
 
 Losing the private key means installed copies can't auto-update to anything signed with a new key — users would need to download that release manually once.
+
+### Releasing
+
+Bump the version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, then merge to `master`. When every build passes and no `v<version>` release exists yet, CI publishes `CipherLoom v<version>` with `CipherLoom.exe`, `CipherLoom.exe.sig`, `CipherLoom-linux.zip` and `CipherLoom-macos.zip`, plus auto-generated notes (edit them on GitHub afterwards). It refuses to publish if the three versions disagree or the Windows signature is missing.
 
 ## Project Structure
 
