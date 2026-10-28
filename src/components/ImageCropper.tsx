@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react
 import { Section } from "./Section";
 import { PillSelector } from "./PillSelector";
 import { invoke } from "../invoke";
+import { usePersistentState } from "../useSettings";
 
 type Rect = { x: number; y: number; w: number; h: number };
 
@@ -28,9 +29,9 @@ export function ImageCropper() {
   const [imageSize, setImageSize] = useState({ w: 0, h: 0 });
   const [imagePath, setImagePath] = useState("");
   const [canvasSize, setCanvasSize] = useState({ w: 600, h: 400 });
-  const [aspect, setAspect] = useState("free");
-  const [format, setFormat] = useState("png");
-  const [quality, setQuality] = useState(90);
+  const [aspect, setAspect] = usePersistentState("cipherloom.crop.aspect", "free");
+  const [format, setFormat] = usePersistentState("cipherloom.crop.format", "png");
+  const [quality, setQuality] = usePersistentState("cipherloom.crop.quality", 90);
   const [saving, setSaving] = useState(false);
   const [savedPath, setSavedPath] = useState("");
 

@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom/vitest";
+import { beforeEach } from "vitest";
 
 // Mock Tauri APIs
 Object.defineProperty(window, "__TAURI_INTERNALS__", { value: undefined });
@@ -24,3 +25,6 @@ const mockCtx = {
   canvas: { width: 600, height: 400 },
 };
 HTMLCanvasElement.prototype.getContext = (() => mockCtx) as any;
+
+// Tools persist options to localStorage; don't let one test's choices leak into the next
+beforeEach(() => localStorage.clear());

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Section } from "./Section";
 import { PillSelector } from "./PillSelector";
 import { invoke } from "../invoke";
+import { usePersistentState } from "../useSettings";
 
 const ALL_FORMATS = ["WebP", "PNG", "JPEG", "JPEGLI", "AVIF", "TIFF", "BMP", "GIF", "ICO"];
 
@@ -28,18 +29,18 @@ interface QueueFile {
 }
 
 export function ImageConverter() {
-  const [sourcePath, setSourcePath] = useState("");
-  const [destPath, setDestPath] = useState("");
-  const [format, setFormat] = useState("WebP");
-  const [convert, setConvert] = useState(true);
-  const [compress, setCompress] = useState(true);
-  const [rename, setRename] = useState(false);
-  const [resize, setResize] = useState(false);
-  const [quality, setQuality] = useState(82);
-  const [sizeMode, setSizeMode] = useState<"quality" | "target">("quality");
-  const [targetSize, setTargetSize] = useState("200");
-  const [targetUnit, setTargetUnit] = useState("KB");
-  const [resizePercent, setResizePercent] = useState(75);
+  const [sourcePath, setSourcePath] = usePersistentState("cipherloom.converter.sourcePath", "");
+  const [destPath, setDestPath] = usePersistentState("cipherloom.converter.destPath", "");
+  const [format, setFormat] = usePersistentState("cipherloom.converter.format", "WebP");
+  const [convert, setConvert] = usePersistentState("cipherloom.converter.convert", true);
+  const [compress, setCompress] = usePersistentState("cipherloom.converter.compress", true);
+  const [rename, setRename] = usePersistentState("cipherloom.converter.rename", false);
+  const [resize, setResize] = usePersistentState("cipherloom.converter.resize", false);
+  const [quality, setQuality] = usePersistentState("cipherloom.converter.quality", 82);
+  const [sizeMode, setSizeMode] = usePersistentState<"quality" | "target">("cipherloom.converter.sizeMode", "quality");
+  const [targetSize, setTargetSize] = usePersistentState("cipherloom.converter.targetSize", "200");
+  const [targetUnit, setTargetUnit] = usePersistentState("cipherloom.converter.targetUnit", "KB");
+  const [resizePercent, setResizePercent] = usePersistentState("cipherloom.converter.resizePercent", 75);
   const [progress, setProgress] = useState(0);
   const [running, setRunning] = useState(false);
   const [stats, setStats] = useState("");

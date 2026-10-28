@@ -66,6 +66,24 @@ function deepMerge(target: any, source: any): any {
   return out;
 }
 
+/** useState backed by localStorage — for per-tool conveniences like last paths and options. */
+export function usePersistentState<T>(key: string, initial: T) {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return initial;
+      const parsed = JSON.parse(raw);
+      return typeof parsed === typeof initial ? parsed : initial;
+    } catch {
+      return initial;
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+  }, [key, value]);
+  return [value, setValue] as const;
+}
+
 export function useSettings() {
   const [settings, setSettingsState] = useState<AppSettings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
