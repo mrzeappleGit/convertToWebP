@@ -584,7 +584,22 @@ async fn convert_video(app: tauri::AppHandle, args: VideoConvertArgs) -> Result<
     Ok(output.to_string_lossy().to_string())
 }
 
-/// Run FFmpeg, streaming its stderr to the given frontend event channel.
+/// Parse an FFmpeg `HH:MM:SS.xx` timestamp into seconds.
+fn parse_hms(s: &str) -> Option<f64> {
+    let mut parts = s.trim().splitn(3, ':').map(|p| p.parse::<f64>().ok());
+    let (h, m, sec) = (parts.next()??, parts.next()??, parts.next()??);
+    Some(h * 3600.0 + m * 60.0 + sec)
+}
+
+/// Percent done from an FFmpeg status line (`frame=… time=00:00:12.34 …`), given the input duration.
+fn ffmpeg_progress(line: &str, duration_secs: f64) -> Option<f64> {
+    if duration_secs <= 0.0 { return None; }
+    let t = line.split("time=").nth(1)?.split_whitespace().next()?;
+    Some((parse_hms(t)? / duration_secs * 100.0).clamp(0.0, 100.0))
+}
+
+/// Run FFmpeg, streaming its stderr to the given frontend event channel and
+/// percent-done to `<event>-progress`.
 fn run_ffmpeg_streaming(app: &tauri::AppHandle, ffmpeg: &Path, args: &[String], event: &str) -> Result<(), String> {
     let mut cmd = Command::new(ffmpeg);
     cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -596,11 +611,24 @@ fn run_ffmpeg_streaming(app: &tauri::AppHandle, ffmpeg: &Path, args: &[String], 
     if let Some(stderr) = child.stderr.take() {
         let app_handle = app.clone();
         let event = event.to_string();
+        let progress_event = format!("{}-progress", event);
         std::thread::spawn(move || {
-            let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    let _ = app_handle.emit(&event, &line);
+            let mut duration_secs = 0.0;
+            // FFmpeg redraws its status line with \r, so split on that too to see it live
+            for chunk in BufReader::new(stderr).split(b'\r').flatten() {
+                for line in String::from_utf8_lossy(&chunk).lines() {
+                    if duration_secs == 0.0 {
+                        if let Some(d) = line.split("Duration:").nth(1).and_then(|r| parse_hms(r.split(',').next()?)) {
+                            duration_secs = d;
+                        }
+                    }
+                    if line.starts_with("frame=") || line.starts_with("size=") {
+                        if let Some(pct) = ffmpeg_progress(line, duration_secs) {
+                            let _ = app_handle.emit(&progress_event, pct);
+                        }
+                    } else if !line.is_empty() {
+                        let _ = app_handle.emit(&event, line);
+                    }
                 }
             }
         });
@@ -1377,6 +1405,16 @@ mod tests {
         assert!(verify_update_signature(b"MZ cipherloom signature fixturE", TEST_SIG, TEST_PUBKEY).is_err());
         assert!(verify_update_signature(TEST_DATA, "garbage", TEST_PUBKEY).is_err());
         assert!(verify_update_signature(TEST_DATA, TEST_SIG, "").is_err());
+    }
+
+    #[test]
+    fn ffmpeg_progress_from_status_line() {
+        let line = "frame=  300 fps= 60 q=28.0 size=    1024kB time=00:00:30.00 bitrate= 279.6kbits/s speed=2.0x";
+        assert_eq!(ffmpeg_progress(line, 120.0), Some(25.0));
+        assert_eq!(ffmpeg_progress(line, 0.0), None); // duration unknown
+        assert_eq!(ffmpeg_progress("frame=    0 fps=0.0 q=0.0 size=0kB time=N/A bitrate=N/A", 120.0), None);
+        assert_eq!(ffmpeg_progress(line, 20.0), Some(100.0)); // clamped
+        assert_eq!(parse_hms(" 01:02:03.50"), Some(3723.5));
     }
 
     #[test]

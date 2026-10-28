@@ -19,18 +19,20 @@ export function VideoConverter() {
   const [crf, setCrf] = usePersistentState("cipherloom.video.crf", 23);
   const [res, setRes] = usePersistentState("cipherloom.video.res", "original");
   const [converting, setConverting] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [log, setLog] = useState<string[]>([]);
   const logEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let unlisten: (() => void) | null = null;
+    const unlisteners: (() => void)[] = [];
     (async () => {
       if (window.__TAURI_INTERNALS__) {
         const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen<string>("ffmpeg-log", e => setLog(p => [...p, e.payload]));
+        unlisteners.push(await listen<string>("ffmpeg-log", e => setLog(p => [...p, e.payload])));
+        unlisteners.push(await listen<number>("ffmpeg-log-progress", e => setProgress(Math.round(e.payload))));
       }
     })();
-    return () => { unlisten?.(); };
+    return () => unlisteners.forEach(u => u());
   }, []);
   useEffect(() => { logEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [log]);
 
@@ -53,11 +55,12 @@ export function VideoConverter() {
 
   const handleConvert = async () => {
     if (!src) return;
-    setConverting(true); setLog(["Starting FFmpeg…"]);
+    setConverting(true); setProgress(0); setLog(["Starting FFmpeg…"]);
     try {
       const r = await invoke<string>("convert_video", {
         args: { sourcePath: src, destPath: dest, format: fmt, videoCodec: V_MAP[vc], audioCodec: A_MAP[ac], crf, resolution: res },
       });
+      setProgress(100);
       setLog(p => [...p, `\n✓ Done: ${r}`]);
     } catch (e: any) { setLog(p => [...p, `\n✕ Error: ${e}`]); }
     finally { setConverting(false); }
@@ -111,6 +114,14 @@ export function VideoConverter() {
           </Section>
         </div>
         <div className="wwk-panel-pinned">
+          <div className="row between center" style={{ marginBottom: 10, fontSize: 11.5 }}>
+            <span className="dim">{converting ? "Converting…" : progress === 100 ? "Done" : "Ready to convert"}</span>
+            {progress > 0 && <span className="mono dim tnum">{progress}%</span>}
+          </div>
+          <div className="wwk-progress" style={{ marginBottom: 12 }} role="progressbar"
+            aria-label="Conversion progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+            <div className="wwk-progress-fill" style={{ width: `${progress}%` }} />
+          </div>
           <button className="wwk-btn primary block lg" onClick={handleConvert} disabled={converting || !src}>
             ▶ {converting ? "Converting…" : "Convert"}
           </button>
