@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { Section } from "./Section";
 import { PillSelector } from "./PillSelector";
+import { usePersistentState } from "../useSettings";
 
 const MODES = ["slug", "lowercase", "UPPERCASE", "Title Case", "camelCase", "kebab-case", "snake_case"];
 
@@ -25,7 +26,7 @@ function transformText(input: string, mode: string): string {
 
 export function TextFormatter() {
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState("slug");
+  const [mode, setMode] = usePersistentState("cipherloom.text.mode", "slug");
   const [copied, setCopied] = useState(false);
   const result = useMemo(() => transformText(input, mode), [input, mode]);
   const handleCopy = useCallback(() => {

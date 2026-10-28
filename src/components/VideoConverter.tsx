@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Section } from "./Section";
 import { PillSelector } from "./PillSelector";
 import { invoke } from "../invoke";
+import { usePersistentState } from "../useSettings";
 
 const V_CODECS: Record<string, string[]> = { mp4: ["H.264", "H.265 (HEVC)"], webm: ["VP9"] };
 const V_MAP: Record<string, string> = { "H.264": "libx264", "H.265 (HEVC)": "libx265", "VP9": "libvpx-vp9" };
@@ -10,13 +11,13 @@ const A_MAP: Record<string, string> = { AAC: "aac", Opus: "libopus" };
 const CRF_DEF: Record<string, number> = { "H.264": 23, "H.265 (HEVC)": 28, VP9: 31 };
 
 export function VideoConverter() {
-  const [src, setSrc] = useState("");
-  const [dest, setDest] = useState("");
-  const [fmt, setFmt] = useState("mp4");
-  const [vc, setVc] = useState("H.264");
-  const [ac, setAc] = useState("AAC");
-  const [crf, setCrf] = useState(23);
-  const [res, setRes] = useState("original");
+  const [src, setSrc] = usePersistentState("cipherloom.video.src", "");
+  const [dest, setDest] = usePersistentState("cipherloom.video.dest", "");
+  const [fmt, setFmt] = usePersistentState("cipherloom.video.fmt", "mp4");
+  const [vc, setVc] = usePersistentState("cipherloom.video.vc", "H.264");
+  const [ac, setAc] = usePersistentState("cipherloom.video.ac", "AAC");
+  const [crf, setCrf] = usePersistentState("cipherloom.video.crf", 23);
+  const [res, setRes] = usePersistentState("cipherloom.video.res", "original");
   const [converting, setConverting] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const logEnd = useRef<HTMLDivElement>(null);

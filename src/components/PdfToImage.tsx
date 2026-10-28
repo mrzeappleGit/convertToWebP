@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Section } from "./Section";
 import { PillSelector } from "./PillSelector";
 import { invoke } from "../invoke";
+import { usePersistentState } from "../useSettings";
 import * as pdfjsLib from "pdfjs-dist";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
@@ -18,9 +19,9 @@ function Check({ checked, onChange, label }: { checked: boolean; onChange: (v: b
 
 export function PdfToImage() {
   const [pdfPath, setPdfPath] = useState("");
-  const [fmt, setFmt] = useState("WebP");
-  const [quality, setQuality] = useState(85);
-  const [margins, setMargins] = useState(true);
+  const [fmt, setFmt] = usePersistentState("cipherloom.pdf.fmt", "WebP");
+  const [quality, setQuality] = usePersistentState("cipherloom.pdf.quality", 85);
+  const [margins, setMargins] = usePersistentState("cipherloom.pdf.margins", true);
   const [output, setOutput] = useState("");
   const [converting, setConverting] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);

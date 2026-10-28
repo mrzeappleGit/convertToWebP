@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Section } from "./Section";
 import { PillSelector } from "./PillSelector";
 import { invoke } from "../invoke";
+import { usePersistentState } from "../useSettings";
 
 const UNIT_BYTES: Record<string, number> = { MB: 1048576, GB: 1073741824 };
 
@@ -23,11 +24,11 @@ function formatSize(bytes: number): string {
 }
 
 export function VideoCompressor() {
-  const [src, setSrc] = useState("");
-  const [dest, setDest] = useState("");
-  const [fmt, setFmt] = useState("mp4");
-  const [size, setSize] = useState("25");
-  const [unit, setUnit] = useState("MB");
+  const [src, setSrc] = usePersistentState("cipherloom.vcompress.src", "");
+  const [dest, setDest] = usePersistentState("cipherloom.vcompress.dest", "");
+  const [fmt, setFmt] = usePersistentState("cipherloom.vcompress.fmt", "mp4");
+  const [size, setSize] = usePersistentState("cipherloom.vcompress.size", "25");
+  const [unit, setUnit] = usePersistentState("cipherloom.vcompress.unit", "MB");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<CompressResult | null>(null);
   const [error, setError] = useState("");

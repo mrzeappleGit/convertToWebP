@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Section } from "./Section";
 import { PillSelector } from "./PillSelector";
 import { invoke } from "../invoke";
+import { usePersistentState } from "../useSettings";
 
 const CASE_OPTIONS = ["original", "lowercase", "UPPERCASE", "Title Case"];
 
@@ -18,12 +19,12 @@ function Check({ checked, onChange, label }: { checked: boolean; onChange: (v: b
 }
 
 export function FileRenamer() {
-  const [folderPath, setFolderPath] = useState("");
+  const [folderPath, setFolderPath] = usePersistentState("cipherloom.renamer.folderPath", "");
   const [filePath, setFilePath] = useState("");
-  const [prefix, setPrefix] = useState("");
-  const [suffix, setSuffix] = useState("");
-  const [slug, setSlug] = useState(true);
-  const [caseMode, setCaseMode] = useState("original");
+  const [prefix, setPrefix] = usePersistentState("cipherloom.renamer.prefix", "");
+  const [suffix, setSuffix] = usePersistentState("cipherloom.renamer.suffix", "");
+  const [slug, setSlug] = usePersistentState("cipherloom.renamer.slug", true);
+  const [caseMode, setCaseMode] = usePersistentState("cipherloom.renamer.caseMode", "original");
   const [previewItems, setPreviewItems] = useState<PreviewItem[]>([]);
   const [stats, setStats] = useState({ ready: 0, modified: 0, errors: 0 });
 

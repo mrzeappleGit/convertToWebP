@@ -971,6 +971,19 @@ fn save_settings(settings: serde_json::Value) -> Result<(), String> {
 const GITHUB_REPO: &str = "mrzeappleGit/convertToWebP";
 // Single source of truth: Cargo.toml (kept in sync with tauri.conf.json / package.json)
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+// Contents of the .pub file from `tauri signer generate`. Empty = auto-install disabled.
+const UPDATE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ3RkM3QUUxMEE4OTYzMjQKUldRa1k0a0s0WHI4MTdjVEt3WDdkTmtmZkZSajJPR1VxY2Noc1BZMXY1ZnUyYjZRS0t3OEZLTkUK";
+
+/// Key and signature are base64-wrapped minisign text, as written by `tauri signer`.
+fn verify_update_signature(data: &[u8], sig_b64: &str, pubkey_b64: &str) -> Result<(), String> {
+    let decode = |s: &str| base64::engine::general_purpose::STANDARD.decode(s.trim()).ok()
+        .and_then(|b| String::from_utf8(b).ok());
+    let key = decode(pubkey_b64).and_then(|s| minisign_verify::PublicKey::decode(&s).ok())
+        .ok_or("Invalid update public key")?;
+    let sig = decode(sig_b64).and_then(|s| minisign_verify::Signature::decode(&s).ok())
+        .ok_or("Invalid update signature file")?;
+    key.verify(data, &sig, false).map_err(|_| "Update signature doesn't match — not installing".to_string())
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -979,6 +992,7 @@ struct UpdateInfo {
     current_version: String,
     latest_version: String,
     download_url: String,
+    release_url: String,
     release_notes: String,
 }
 
@@ -1016,6 +1030,7 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
     let release: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
     let tag = release["tag_name"].as_str().unwrap_or("");
     let notes = release["body"].as_str().unwrap_or("").to_string();
+    let release_url = release["html_url"].as_str().unwrap_or("").to_string();
 
     if tag.is_empty() || !version_gt(tag, CURRENT_VERSION) {
         return Ok(UpdateInfo {
@@ -1023,31 +1038,32 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
             current_version: CURRENT_VERSION.to_string(),
             latest_version: tag.to_string(),
             download_url: String::new(),
+            release_url,
             release_notes: String::new(),
         });
     }
 
-    // Find .exe asset
-    let mut dl_url = String::new();
-    if let Some(assets) = release["assets"].as_array() {
-        for asset in assets {
-            if let Some(name) = asset["name"].as_str() {
-                if name.to_lowercase().ends_with(".exe") {
-                    dl_url = asset["browser_download_url"].as_str().unwrap_or("").to_string();
-                    break;
-                }
-            }
-        }
-    }
-    if dl_url.is_empty() {
-        dl_url = release["html_url"].as_str().unwrap_or("").to_string();
-    }
+    // In-place install only works for the standalone Windows exe, and only when the
+    // release also carries its .sig; everything else gets an empty download_url and
+    // is sent to the release page.
+    let assets: Vec<&serde_json::Value> = release["assets"].as_array().into_iter().flatten().collect();
+    let dl_url = if cfg!(windows) && !UPDATE_PUBKEY.is_empty() {
+        assets.iter()
+            .filter_map(|a| Some((a["name"].as_str()?, a["browser_download_url"].as_str()?)))
+            .find(|(name, _)| name.to_lowercase().ends_with(".exe")
+                && assets.iter().any(|s| s["name"].as_str() == Some(&format!("{}.sig", name))))
+            .map(|(_, url)| url.to_string())
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
 
     Ok(UpdateInfo {
         available: true,
         current_version: CURRENT_VERSION.to_string(),
         latest_version: tag.to_string(),
         download_url: dl_url,
+        release_url,
         release_notes: notes,
     })
 }
@@ -1056,15 +1072,28 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
 
 #[tauri::command]
 async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if !cfg!(windows) || url.is_empty() || UPDATE_PUBKEY.is_empty() {
+        return Err("Automatic install isn't available here — download it from the release page.".into());
+    }
+
     // Determine current exe path
     let current_exe = std::env::current_exe().map_err(|e| format!("Cannot find exe: {}", e))?;
     let exe_dir = current_exe.parent().ok_or("Cannot find exe directory")?;
-    let exe_name = current_exe.file_name().ok_or("Cannot get exe name")?.to_string_lossy().to_string();
     let download_path = exe_dir.join("latest_update.exe");
 
-    // Download the new exe
+    // The signature is a small asset published next to the exe (see check_for_updates)
     app.emit("update-progress", "Downloading update...").ok();
     let client = reqwest::Client::new();
+    let sig_resp = client.get(format!("{}.sig", url))
+        .header("User-Agent", format!("CipherLoom/{}", CURRENT_VERSION))
+        .send().await
+        .map_err(|e| format!("Signature download failed: {}", e))?;
+    if !sig_resp.status().is_success() {
+        return Err(format!("Signature download failed: HTTP {}", sig_resp.status()));
+    }
+    let signature = sig_resp.text().await.map_err(|e| format!("Signature download failed: {}", e))?;
+
+    // Download the new exe
     let resp = client.get(&url)
         .header("User-Agent", format!("CipherLoom/{}", CURRENT_VERSION))
         .send().await
@@ -1075,28 +1104,47 @@ async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Resu
     }
 
     let total = resp.content_length().unwrap_or(0);
-    let mut downloaded: u64 = 0;
     let mut file = fs::File::create(&download_path).map_err(|e| format!("Cannot create file: {}", e))?;
 
-    use std::io::Write;
-    let mut stream = resp.bytes_stream();
-    use futures_util::StreamExt;
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
-        file.write_all(&chunk).map_err(|e| format!("Write error: {}", e))?;
-        downloaded += chunk.len() as u64;
-        if total > 0 {
-            let pct = (downloaded as f64 / total as f64 * 100.0) as u32;
-            app.emit("update-progress", format!("Downloading... {}%", pct)).ok();
+    let result: Result<(), String> = async {
+        use std::io::Write;
+        use futures_util::StreamExt;
+        let mut downloaded: u64 = 0;
+        let mut last_pct = u32::MAX;
+        let mut stream = resp.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
+            file.write_all(&chunk).map_err(|e| format!("Write error: {}", e))?;
+            downloaded += chunk.len() as u64;
+            if total > 0 {
+                let pct = (downloaded as f64 / total as f64 * 100.0) as u32;
+                if pct != last_pct {
+                    last_pct = pct;
+                    app.emit("update-progress", format!("Downloading... {}%", pct)).ok();
+                }
+            }
         }
-    }
+        file.sync_all().map_err(|e| format!("Write error: {}", e))?;
+        if total > 0 && downloaded != total {
+            return Err(format!("Download incomplete ({} of {} bytes)", downloaded, total));
+        }
+        app.emit("update-progress", "Verifying signature...").ok();
+        // Verify the bytes on disk — exactly what the helper script will move into place
+        let data = fs::read(&download_path).map_err(|e| format!("Cannot read download: {}", e))?;
+        verify_update_signature(&data, &signature, UPDATE_PUBKEY)
+    }.await;
     drop(file);
+    if let Err(e) = result {
+        fs::remove_file(&download_path).ok();
+        return Err(e);
+    }
 
-    app.emit("update-progress", "Installing update...").ok();
+    app.emit("update-progress", "Restarting to finish the update...").ok();
 
-    // Platform-specific: write a helper script to replace the binary and restart
+    // Write a helper script to replace the binary and restart
     #[cfg(windows)]
     {
+        let exe_name = current_exe.file_name().ok_or("Cannot get exe name")?.to_string_lossy().to_string();
         let helper_path = exe_dir.join("update_helper.bat");
         let script = format!(
             "@echo off\r\ntimeout /t 2 /nobreak > NUL\r\n\
@@ -1117,26 +1165,6 @@ async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Resu
         Command::new("cmd.exe")
             .args(["/c", &helper_path.to_string_lossy()])
             .creation_flags(flags)
-            .spawn()
-            .map_err(|e| format!("Cannot launch helper: {}", e))?;
-    }
-
-    #[cfg(not(windows))]
-    {
-        let helper_path = exe_dir.join("update_helper.sh");
-        let script = format!(
-            "#!/bin/sh\nsleep 2\ncp -f '{}' '{}'\nchmod +x '{}'\n'{}' &\nrm -f '$0'\n",
-            download_path.to_string_lossy(), current_exe.to_string_lossy(),
-            current_exe.to_string_lossy(), current_exe.to_string_lossy(),
-        );
-        fs::write(&helper_path, &script).map_err(|e| format!("Cannot write helper: {}", e))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&helper_path, fs::Permissions::from_mode(0o755)).ok();
-        }
-        Command::new("sh")
-            .arg(&helper_path)
             .spawn()
             .map_err(|e| format!("Cannot launch helper: {}", e))?;
     }
@@ -1337,5 +1365,26 @@ mod tests {
         assert_eq!(auto_cap_height(4000.0), 2160);
         assert_eq!(auto_cap_height(8000.0), u32::MAX);
     }
-}
 
+    // Throwaway key pair made with `tauri signer generate`, used only for this fixture
+    const TEST_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCRjQ0REZBNjczMzJENjYKUldSbUxUTm4razMwMjgxejZHakpodFNaV1YyN2g0WUVQRHpyY0VXRXAwNHlhVnkvc1NQMytjSnAK";
+    const TEST_SIG: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSbUxUTm4razMwMjlIYjUxRi9JbyswWmFLK2E1MStnS3Bjc0w2WFRCcXdlVk5jUTh0UDBuOWVtb3FYS3BoaXNqTE15My9xbXlHV0Qzd2h6UlZOdG15NDRwNDNBOXBUWXdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMTQ3OTk4CWZpbGU6Zml4dHVyZS5iaW4KWVIzRVJJYlZ2VFUySU1WVzArbWF0dUFoZk0wZFgrUkQyQmZPbnh6ZG1xc1IrODNObVhnYjZrd0VlOHI0R2w1MFFHKzF0YVlFY2VZL3laY3pOdW1XRHc9PQo=";
+    const TEST_DATA: &[u8] = b"MZ cipherloom signature fixture";
+
+    #[test]
+    fn update_signature_accepts_genuine_and_rejects_tampered() {
+        assert!(verify_update_signature(TEST_DATA, TEST_SIG, TEST_PUBKEY).is_ok());
+        assert!(verify_update_signature(b"MZ cipherloom signature fixturE", TEST_SIG, TEST_PUBKEY).is_err());
+        assert!(verify_update_signature(TEST_DATA, "garbage", TEST_PUBKEY).is_err());
+        assert!(verify_update_signature(TEST_DATA, TEST_SIG, "").is_err());
+    }
+
+    #[test]
+    fn release_pubkey_is_valid() {
+        // A bad paste would otherwise only surface as every update failing to verify
+        assert_eq!(
+            verify_update_signature(TEST_DATA, TEST_SIG, UPDATE_PUBKEY),
+            Err("Update signature doesn't match — not installing".to_string()),
+        );
+    }
+}

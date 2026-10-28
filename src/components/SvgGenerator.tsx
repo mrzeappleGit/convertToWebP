@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react
 import { Section } from "./Section";
 import { PillSelector } from "./PillSelector";
 import { invoke } from "../invoke";
+import { usePersistentState } from "../useSettings";
 
 type Point = { x: number; y: number };
 
@@ -13,10 +14,10 @@ export function SvgGenerator() {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageSize, setImageSize] = useState({ w: 0, h: 0 });
-  const [mode, setMode] = useState("Circle");
-  const [radius, setRadius] = useState(20);
-  const [strokeWidth, setStrokeWidth] = useState(2);
-  const [color, setColor] = useState("#55d8e1");
+  const [mode, setMode] = usePersistentState("cipherloom.svg.mode", "Circle");
+  const [radius, setRadius] = usePersistentState("cipherloom.svg.radius", 20);
+  const [strokeWidth, setStrokeWidth] = usePersistentState("cipherloom.svg.strokeWidth", 2);
+  const [color, setColor] = usePersistentState("cipherloom.svg.color", "#55d8e1");
   const [svgOutput, setSvgOutput] = useState("");
   const [allElements, setAllElements] = useState<{ d: string; color: string; sw: number }[]>([]);
   const [zoom, setZoom] = useState(1);
