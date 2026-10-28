@@ -58,6 +58,7 @@ interface UpdateInfo {
   currentVersion: string;
   latestVersion: string;
   downloadUrl: string;
+  releaseUrl: string;
   releaseNotes: string;
 }
 
@@ -86,6 +87,7 @@ function App() {
   const [updateChecked, setUpdateChecked] = useState(false);
   const [updateInstalling, setUpdateInstalling] = useState(false);
   const [updateProgress, setUpdateProgress] = useState("");
+  const [updateError, setUpdateError] = useState("");
 
   // Listen for update progress events
   useEffect(() => {
@@ -128,17 +130,15 @@ function App() {
 
   const checkUpdates = async (silent = false) => {
     setUpdateChecking(true);
+    setUpdateError("");
     try {
       const info = await invoke<UpdateInfo>("check_for_updates");
       if (info) {
         setUpdateInfo(info);
         setUpdateChecked(true);
       }
-      if (!silent && !info.available) {
-        // Will show "up to date" in the about dialog
-      }
     } catch (e) {
-      if (!silent) console.error("Update check failed:", e);
+      if (!silent) setUpdateError(`Couldn't check for updates: ${e}`);
     } finally {
       setUpdateChecking(false);
     }
@@ -333,18 +333,31 @@ function App() {
                     {updateInstalling ? (
                       <div className="dim" style={{ fontSize: 12 }}>{updateProgress || "Starting update..."}</div>
                     ) : (
-                      <button className="wwk-btn primary sm" onClick={async () => {
-                        setUpdateInstalling(true);
-                        setUpdateProgress("Starting download...");
-                        try {
-                          await invoke("download_and_install_update", { url: updateInfo!.downloadUrl });
-                        } catch (e: any) {
-                          setUpdateProgress(`Error: ${e}`);
-                          setUpdateInstalling(false);
-                        }
-                      }}>
-                        ⬇ Install Update
-                      </button>
+                      <>
+                        {updateError && <div style={{ fontSize: 12, color: "var(--error)", marginBottom: 8 }}>{updateError}</div>}
+                        <div className="row gap-3 center">
+                          {updateInfo!.downloadUrl && (
+                            <button className="wwk-btn primary sm" onClick={async () => {
+                              setUpdateInstalling(true);
+                              setUpdateError("");
+                              setUpdateProgress("Starting download...");
+                              try {
+                                await invoke("download_and_install_update", { url: updateInfo!.downloadUrl });
+                              } catch (e: any) {
+                                setUpdateError(`Update failed: ${e}`);
+                                setUpdateInstalling(false);
+                              }
+                            }}>
+                              ⬇ Install Update
+                            </button>
+                          )}
+                          {updateInfo!.releaseUrl && (
+                            <button className={`wwk-btn sm ${updateInfo!.downloadUrl ? "" : "primary"}`} onClick={() => openUrl(updateInfo!.releaseUrl)}>
+                              Release page ↗
+                            </button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 ) : updateChecked ? (
@@ -353,7 +366,10 @@ function App() {
                     <span className="wwk-dot ok" />
                   </div>
                 ) : (
-                  <button className="wwk-btn sm" onClick={() => checkUpdates()}>Check for updates</button>
+                  <div className="row between center">
+                    {updateError && <span style={{ fontSize: 12, color: "var(--error)" }}>{updateError}</span>}
+                    <button className="wwk-btn sm" onClick={() => checkUpdates()}>{updateError ? "Retry" : "Check for updates"}</button>
+                  </div>
                 )}
               </div>
 

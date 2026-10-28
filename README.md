@@ -102,18 +102,19 @@ Theme selection persists across sessions.
 
 ## Settings
 
-Preferences are saved to `%APPDATA%/mts-studios/CipherLoom/settings.json` and persist across sessions (settings from Web Weaver Kit installs are migrated automatically):
-- Selected theme
-- Converter defaults (format, quality, compression, resize)
-- Renamer defaults (slug, case, prefix/suffix)
-- PDF/video/text/crop preferences
+The selected theme is saved to `%APPDATA%/mts-studios/CipherLoom/settings.json` (settings from Web Weaver Kit installs are migrated automatically).
+
+Each tool also remembers its last source/destination paths and options (format, quality, codecs, target sizes, renamer prefix/suffix, and so on) in the app's local storage.
 
 ## Auto-Updater
 
 The app checks GitHub releases on launch. When an update is available:
 - A green dot appears on the menu button
 - The About dialog shows the new version and release notes
-- Click "Install Update" to download and install automatically — the app restarts with the new version
+- On Windows, click "Install Update" to download and install automatically — the app restarts with the new version
+- On macOS/Linux, or for a release without a signature, "Release page ↗" opens the download page instead
+
+Automatic installs are signature-checked: the downloaded exe must match `CipherLoom.exe.sig` from the same release, signed with the key whose public half is `UPDATE_PUBKEY` in `src-tauri/src/lib.rs`. A missing or mismatched signature means nothing is installed.
 
 ## Tech Stack
 
@@ -159,6 +160,20 @@ npm run tauri build
 ```
 
 The executable lands in `src-tauri/target/release/`; platform installers (when bundling) in `src-tauri/target/release/bundle/`.
+
+### Signing updates
+
+One-time setup:
+1. Generate a key pair (keep the private key out of the repo):
+   ```bash
+   npx tauri signer generate -w $HOME/.tauri/cipherloom.key
+   ```
+2. Paste the contents of `~/.tauri/cipherloom.key.pub` into `UPDATE_PUBKEY` in `src-tauri/src/lib.rs`.
+3. Add GitHub repository secrets: `TAURI_SIGNING_PRIVATE_KEY` (contents of `~/.tauri/cipherloom.key`) and, if you set one, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
+Each release: upload both `CipherLoom.exe` and `CipherLoom.exe.sig` from the `CipherLoom-windows` CI artifact. To sign a local build instead: `npx tauri signer sign -f $HOME/.tauri/cipherloom.key src-tauri/target/release/CipherLoom.exe`.
+
+Losing the private key means installed copies can't auto-update to anything signed with a new key — users would need to download that release manually once.
 
 ## Project Structure
 

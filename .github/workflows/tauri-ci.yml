@@ -29,7 +29,9 @@ jobs:
         include:
           - platform: windows-latest
             artifact: CipherLoom-windows
-            bundle-path: src-tauri/target/release/CipherLoom.exe
+            bundle-path: |
+              src-tauri/target/release/CipherLoom.exe
+              src-tauri/target/release/CipherLoom.exe.sig
           - platform: ubuntu-22.04
             artifact: CipherLoom-linux
             bundle-path: |
@@ -42,9 +44,10 @@ jobs:
               src-tauri/target/release/bundle/dmg/*.dmg
 
     runs-on: ${{ matrix.platform }}
-    # Dependabot-triggered runs get no repository secrets; fall back to an unsigned macOS build
+    # Dependabot-triggered runs get no repository secrets; fall back to unsigned builds
     env:
       MAC_SIGN: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+      UPDATE_SIGN: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -136,6 +139,14 @@ jobs:
         run: |
           npm run tauri build -- --no-bundle
           mv src-tauri/target/release/app.exe src-tauri/target/release/CipherLoom.exe
+
+      # Writes CipherLoom.exe.sig; the in-app updater refuses to install a release without it
+      - name: Sign update (Windows)
+        if: matrix.platform == 'windows-latest' && env.UPDATE_SIGN == 'true'
+        run: npx tauri signer sign src-tauri/target/release/CipherLoom.exe
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       # Build on Linux
       - name: Build (Linux)
