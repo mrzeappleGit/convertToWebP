@@ -159,3 +159,46 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.bundle-path }}
+
+  # Publishes a release when master's version has no release yet, so bumping the version is what ships
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          v=$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
+          # The app reports the Cargo version; a mismatch would make it nag about updates forever
+          for f in package.json src-tauri/tauri.conf.json; do
+            [ "$(jq -r .version "$f")" = "$v" ] || { echo "::error::$f version doesn't match Cargo.toml ($v)"; exit 1; }
+          done
+          if gh release view "v$v" > /dev/null 2>&1; then
+            echo "v$v already released, nothing to do"
+          else
+            echo "tag=v$v" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        if: steps.version.outputs.tag
+        with:
+          path: artifacts
+
+      - name: Publish release
+        if: steps.version.outputs.tag
+        run: |
+          tag=${{ steps.version.outputs.tag }}
+          win=artifacts/CipherLoom-windows
+          # Without the .sig, the in-app updater can't auto-install this release
+          [ -f "$win/CipherLoom.exe.sig" ] || { echo "::error::CipherLoom.exe.sig missing; is TAURI_SIGNING_PRIVATE_KEY set?"; exit 1; }
+          (cd artifacts/CipherLoom-linux && zip -qr ../../CipherLoom-linux.zip .)
+          (cd artifacts/CipherLoom-macos && zip -qr ../../CipherLoom-macos.zip .)
+          gh release create "$tag" --title "CipherLoom $tag" --target "$GITHUB_SHA" --generate-notes \
+            "$win/CipherLoom.exe" "$win/CipherLoom.exe.sig" CipherLoom-linux.zip CipherLoom-macos.zip
