@@ -119,6 +119,16 @@ jobs:
             echo "FFmpeg signed successfully"
           fi
 
+      # Windows: download FFmpeg into resources/ (tauri.windows.conf.json bundles it)
+      - name: Bundle FFmpeg for Windows
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          # Pinned gyan.dev release essentials build (GitHub mirror); bump URL + hash together
+          curl -fL "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip" -o ffmpeg.zip
+          echo "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba  ffmpeg.zip" | sha256sum -c -
+          unzip -j ffmpeg.zip "*/bin/ffmpeg.exe" -d resources/
+
       - run: npm ci
 
       # Build with signing + notarization on macOS

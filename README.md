@@ -144,6 +144,8 @@ cd convertToWebP
 npm install
 ```
 
+On Windows, Tauri needs `resources/ffmpeg.exe` to build. It isn't in git: download the build pinned in the "Bundle FFmpeg for Windows" step of `.github/workflows/tauri-ci.yml`, check its SHA-256, and copy `bin/ffmpeg.exe` from the zip into `resources/`.
+
 ### Dev mode
 ```bash
 npm run tauri dev
